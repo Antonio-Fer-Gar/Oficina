@@ -522,7 +522,7 @@ function stressColor(color: string, amount: number): string {
 }
 // The first seven names were chosen by the user; the rest are Spanish names for larger offices.
 const CAT_NAMES = ['Pablo', 'Oscar', 'Antonio', 'Javi', 'Álvaro', 'Alex', 'Mihai',
-  'Lucía', 'Sergio', 'Carmen', 'Diego', 'Marta', 'Raúl', 'Elena', 'Iván', 'Nuria', 'Hugo', 'Paula', 'Jorge', 'Irene'];
+  'Lucía', 'Sergio', 'Carmen', 'Diego', 'Marta', 'Raúl', 'Elena', 'Iván', 'Nuria', 'Hugo', 'Paula', 'Jorge', 'Irene', 'Laura', 'Nono'];
 export function catName(order: number): string {
   return CAT_NAMES[order % CAT_NAMES.length]! + (order >= CAT_NAMES.length ? ' ' + (Math.floor(order / CAT_NAMES.length) + 1) : '');
 }
