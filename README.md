@@ -2,6 +2,47 @@
 
 Aplicación de Windows que muestra las sesiones de omp como una oficina en pixel art. Por defecto ocupa una franja superior, dejando 34 px para las pestañas de las consolas. Puedes moverla arrastrando la barra superior y cambiar su tamaño desde los bordes: recuerda posición y tamaño. En **Ajustes** puedes restaurarlos y elegir **Siempre encima**, desactivado por defecto. La oficina observa y envía mensajes a la sesión que eliges. Las preguntas de omp se pueden ver y responder desde su ficha sin cambiar a la consola; las autorizaciones y revisiones de planes conservan el acceso a la consola original.
 
+## Instalar en Windows
+
+**Opción recomendada para usuarios:** descargar el instalador `.exe` desde [GitHub Releases](https://github.com/Antonio-Fer-Gar/Oficina/releases) y seguir el asistente. El instalador incluye lo necesario para ejecutar la oficina; no hace falta instalar Bun ni Node para usarlo.
+
+**Estado actual:** todavía no hay un instalador publicado en Releases. Mientras tanto, puedes crear uno a partir del código siguiendo estos pasos.
+
+### Crear e instalar desde el código
+
+Requisitos: Windows de 64 bits, conexión a Internet y [Bun 1.3.14 o posterior](https://bun.sh/docs/installation). Para usar la oficina con tus agentes también necesitas tener omp instalado.
+
+1. Instala Bun siguiendo su guía oficial. Después, cierra y vuelve a abrir PowerShell y comprueba que el comando `bun --version` funciona.
+2. Copia y ejecuta este bloque completo en PowerShell. Descarga el código en una carpeta temporal, instala las dependencias, genera el instalador y lo abre:
+
+   ```powershell
+   & {
+     $ErrorActionPreference = 'Stop'
+     $carpeta = Join-Path $env:TEMP ("oficina-" + [guid]::NewGuid().ToString("N"))
+     New-Item -ItemType Directory -Path $carpeta | Out-Null
+     $zip = Join-Path $carpeta "oficina.zip"
+
+     Invoke-WebRequest "https://github.com/Antonio-Fer-Gar/Oficina/archive/refs/heads/main.zip" -OutFile $zip
+     Expand-Archive -Path $zip -DestinationPath $carpeta
+     Set-Location (Join-Path $carpeta "Oficina-main")
+
+     New-Item -ItemType Directory -Force ".superpowers\tools\bun-windows-x64" | Out-Null
+     Copy-Item (Get-Command bun).Source ".superpowers\tools\bun-windows-x64\bun.exe"
+     $bun = ".\.superpowers\tools\bun-windows-x64\bun.exe"
+     & $bun install
+     if ($LASTEXITCODE -ne 0) { throw "No se pudieron instalar las dependencias." }
+     & $bun run dist
+     if ($LASTEXITCODE -ne 0) { throw "No se pudo generar el instalador." }
+
+     $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+     Start-Process (Join-Path (Get-Location) "release\Oficina nter Setup $version.exe")
+   }
+   ```
+
+3. Sigue el asistente. Al abrir la oficina, pulsa **Conectar la oficina con omp** para activar el puente. Desde una terminal nueva podrás abrirla con `oficina`.
+
+El instalador no está firmado, por lo que Windows puede mostrar una advertencia de seguridad. Descarga el código o el instalador únicamente desde el repositorio oficial.
+
 ## Qué se ve
 
 - **Proyectos.** Cada carpeta tiene una mesa. El primer agente de un proyecto nuevo recoge una mesa de la zona de descanso y la coloca; las demás sesiones del proyecto la comparten. Las rutas de Windows que solo difieren en mayúsculas o en la barra final cuentan como la misma carpeta.
