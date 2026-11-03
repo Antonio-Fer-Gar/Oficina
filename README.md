@@ -4,9 +4,16 @@ Aplicación de Windows que muestra las sesiones de omp como una oficina en pixel
 
 ## Instalar en Windows
 
-**Opción recomendada para usuarios:** descargar el instalador `.exe` desde [GitHub Releases](https://github.com/Antonio-Fer-Gar/Oficina/releases) y seguir el asistente. El instalador incluye lo necesario para ejecutar la oficina; no hace falta instalar Bun ni Node para usarlo.
+**Requisitos:** Windows de 64 bits y omp instalado. No necesitas Bun ni Node para ejecutar la aplicación instalada.
 
-**Estado actual:** todavía no hay un instalador publicado en Releases. Mientras tanto, puedes crear uno a partir del código siguiendo estos pasos.
+1. Abre la [última versión de Oficina nter](https://github.com/Antonio-Fer-Gar/Oficina/releases/latest).
+2. En **Assets**, descarga el archivo `Oficina.nter.Setup.<versión>.exe`.
+3. Abre el instalador y sigue el asistente.
+4. Abre la oficina y pulsa **Conectar la oficina con omp**. Después podrás abrirla desde una terminal nueva con `oficina`.
+
+El instalador no está firmado, por lo que Windows puede mostrar una advertencia de seguridad. La página de la versión indica el SHA-256 para verificar la descarga. Descarga el instalador únicamente desde el repositorio oficial.
+
+Si prefieres compilar el proyecto, también puedes crear el instalador desde el código:
 
 ### Crear e instalar desde el código
 
@@ -41,7 +48,7 @@ Requisitos: Windows de 64 bits, conexión a Internet y [Bun 1.3.14 o posterior](
 
 3. Sigue el asistente. Al abrir la oficina, pulsa **Conectar la oficina con omp** para activar el puente. Desde una terminal nueva podrás abrirla con `oficina`.
 
-El instalador no está firmado, por lo que Windows puede mostrar una advertencia de seguridad. Descarga el código o el instalador únicamente desde el repositorio oficial.
+El instalador que generes localmente tampoco estará firmado.
 
 ## Qué se ve
 
@@ -152,7 +159,7 @@ $bun = '.\.superpowers\tools\bun-windows-x64\bun.exe'
 
 `bun run dist` genera `release\win-unpacked\Oficina nter.exe` y un instalador NSIS que incluye Electron y Bun. El equipo de destino no necesita Node ni Bun instalados. Los ejecutables no están firmados.
 
-Para anunciar una nueva versión, incrementa `version` en `package.json` con tres números (`mayor.menor.parche`), comprueba y publica el código en la rama `main`. El aviso compara esa versión con la instalada; no detecta commits que no cambien el número. El repositorio contiene el código: para ofrecer un instalador descargable hay que compilarlo y publicarlo por separado.
+Para publicar una nueva versión, incrementa `version` en `package.json` con tres números (`mayor.menor.parche`), comprueba y publica el código en `main`, genera el instalador con `bun run dist` y adjúntalo a una nueva versión en GitHub Releases. El aviso compara la versión de `main` con la instalada; no detecta commits que no cambien el número. Publica el instalador junto con el cambio de versión para que esté disponible cuando aparezca el aviso.
 
 El icono de Windows es `assets\nter-logo.ico` (256, 128, 64, 48, 32 y 16 px), derivado de `assets\nter-logo.png`. Se incluye ya convertido porque el conversor de iconos de electron-builder se queda bloqueado al ejecutarse con Bun; si cambias el logo, regenera también el `.ico`.
 
