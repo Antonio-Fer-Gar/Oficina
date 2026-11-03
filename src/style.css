@@ -1,0 +1,72 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #b4b5ad; color: #3f463f; font: 13px system-ui, "Segoe UI", sans-serif; user-select: none; }
+.dock { position: relative; height: 100%; border-bottom: 5px solid #8c9882; }
+canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; cursor: pointer; }
+.toolbar { position: absolute; top: 0; left: 0; right: 0; padding: 6px 10px; display: flex; justify-content: flex-end; gap: 5px; align-items: center; -webkit-app-region: drag; }
+.toolbar button, .toolbar input, .toolbar select, .toolbar textarea, .toolbar a, .toolbar [role="button"], .toolbar [role="checkbox"], .toolbar [role="switch"] { -webkit-app-region: no-drag; }
+button { font: inherit; border: 1px solid #8c9882; background: #f4f4ed; color: #3f463f; padding: 3px 9px; border-radius: 3px; cursor: pointer; }
+button:hover { background: #fff; }
+button:disabled { opacity: .55; cursor: default; }
+button[aria-pressed="true"] { background: #d9dccd; }
+.status { background: #f4f4edcc; padding: 3px 8px; border-radius: 3px; font-size: 12px; }
+.notices { position: absolute; top: 6px; left: 10px; display: flex; flex-direction: column; gap: 6px; max-height: calc(100% - 12px); overflow: auto; -webkit-app-region: no-drag; }
+.notice { font-size: 16px; font-weight: 700; padding: 8px 14px; border: 2px solid #b5523b; background: #fff6ec; color: #7d2f1f; box-shadow: 0 3px 10px #0002; text-align: left; }
+.notice small { display: block; font-weight: 400; font-size: 12px; color: #5d4a43; }
+.notice.briefing { border-color: #7d6a3c; color: #5b4a22; background: #fbf5e3; }
+@media (prefers-reduced-motion: no-preference) { .notice.new { animation: pulse 1s ease-out 2; } }
+@keyframes pulse { 50% { transform: scale(1.04); } }
+.panel { position: absolute; top: 34px; bottom: 8px; background: #f8f7f1; border: 1px solid #8c9882; box-shadow: 0 6px 22px #0003; padding: 8px 12px; overflow: auto; user-select: text; }
+.panel header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.card { right: 10px; width: 360px; }
+.card dl { display: grid; grid-template-columns: 70px 1fr; gap: 2px 8px; margin: 0 0 8px; }
+.card dt { color: #6d756a; } .card dd { margin: 0; word-break: break-all; }
+.card label { display: block; margin-top: 6px; } .card select, .card textarea { width: 100%; font: inherit; margin-top: 3px; }
+.row { display: flex; gap: 6px; margin-top: 6px; }
+.hint { margin: 4px 0 0; color: #5d655a; min-height: 1em; }
+.hint.error { color: #9a2f1d; }
+.history { left: 10px; right: 10px; }
+.history table { width: 100%; border-collapse: collapse; }
+.history th, .history td { text-align: left; padding: 3px 6px; border-bottom: 1px solid #dfe0d6; vertical-align: top; }
+.history td.path { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; }
+.row .grow { flex: 1; }
+.card .row label { margin-top: 0; }
+/* Informational notices stay small so they don't hide the desks; decisions keep the big style. */
+.notice.briefing { font-size: 12px; padding: 4px 9px; }
+.notice.briefing small { font-size: 11px; }
+.window-settings { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.window-settings label { display: flex; align-items: center; gap: 5px; }
+.setup { left: 50%; transform: translateX(-50%); width: min(720px, calc(100% - 20px)); }
+.theme-picker { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; padding: 6px 8px; border: 1px solid #c9cec1; }
+.theme-picker legend { padding: 0 4px; font-weight: 700; }
+.theme-picker label { display: flex; align-items: center; gap: 5px; }
+.theme-picker input { margin: 0; }
+.tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+.tabs button[aria-selected="true"] { background: #8c9882; color: #fff; }
+.options { display: flex; gap: 6px; overflow-x: auto; }
+.appearance-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.appearance-group { min-width: 0; margin: 0; padding: 2px 4px 4px; border: 1px solid #c9cec1; }
+.appearance-group legend { padding: 0 4px; font-weight: 700; }
+.option { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; min-width: 78px; font-size: 11px; }
+.option canvas { width: 48px; height: 60px; image-rendering: pixelated; cursor: pointer; }
+.option[aria-checked="true"] { border: 2px solid #b5523b; background: #fff6ec; }
+.tabs .spacer { flex: 1; }
+button.primary { background: #8c9882; color: #fff; }
+.question-form { margin-top: 8px; }
+.question-group { min-width: 0; margin: 6px 0; padding: 6px; border: 1px solid #c9cec1; border-radius: 3px; }
+.question-group legend { padding: 0 4px; font-weight: 700; }
+.question-prompt { margin: 2px 0 6px; white-space: pre-wrap; }
+.question-option { display: flex !important; align-items: flex-start; gap: 5px; margin: 4px 0 !important; }
+.question-option input { flex: none; margin: 2px 0 0; }
+.question-option-copy { display: block; min-width: 0; }
+.question-option-title { display: block; font-weight: 600; }
+.question-recommended { display: inline-block; margin-left: 5px; padding: 0 4px; border-radius: 3px; background: #e8dfc1; color: #5b4a22; font-size: 11px; font-weight: 400; }
+.question-description { display: block; color: #5d655a; font-size: 12px; font-weight: 400; white-space: pre-wrap; }
+.question-preview { max-height: 150px; overflow: auto; margin: 4px 0 0; padding: 5px; border: 1px solid #dfe0d6; background: #efefe8; font: 12px Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.question-custom { width: 100%; margin-top: 3px; font: inherit; }
+.question-submit { margin-top: 6px; }
+.name-form { margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid #dfe0d6; }
+.name-form input { display: block; width: 100%; margin: 3px 0 6px; padding: 4px; font: inherit; }
+.project-cats { list-style: none; margin: 6px 0; padding: 0; }
+.project-cats li { margin: 4px 0; }
+.project-cats button { width: 100%; text-align: left; overflow-wrap: anywhere; }
+.usage pre { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.45 Consolas, "Cascadia Mono", monospace; user-select: text; }

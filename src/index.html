@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'">
+<title>Oficina nter</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="dock">
+  <canvas id="office" aria-label="Oficina de agentes"></canvas>
+  <div class="toolbar">
+    <span id="status" class="status">Conectando…</span>
+    <button id="history-button" type="button">Historial</button>
+    <button id="mute" type="button" aria-pressed="false">Sonido</button>
+    <button id="customize-button" type="button">Ajustes</button>
+    <button id="minimize" type="button" aria-label="Minimizar">–</button>
+    <button id="close" type="button" aria-label="Cerrar oficina">×</button>
+  </div>
+  <div id="notices" class="notices" aria-live="assertive"></div>
+  <section id="card" class="panel card" hidden>
+    <header><strong id="card-name"></strong><button id="card-close" type="button" aria-label="Cerrar ficha">×</button></header>
+    <form id="cat-name-form" class="name-form">
+      <label><span id="agent-name-label">Nombre del gato</span> <input id="cat-name-input" type="text" maxlength="48" autocomplete="off" placeholder="Nombre original"></label>
+      <button id="cat-name-save" type="submit">Guardar nombre</button>
+      <p class="hint">Déjalo vacío para recuperar el nombre original.</p>
+      <p id="cat-name-result" class="hint" role="status"></p>
+    </form>
+    <dl>
+      <dt>Rol</dt><dd id="card-role"></dd>
+      <dt>Proyecto</dt><dd id="card-project"></dd>
+      <dt>Sesión</dt><dd id="card-session"></dd>
+      <dt>Estado</dt><dd id="card-phase"></dd>
+      <dt>Actividad</dt><dd id="card-activity"></dd>
+    </dl>
+    <p id="card-activity-note" class="hint"></p>
+    <div class="row">
+      <label class="grow">Modelo <select id="card-model"></select></label>
+      <label>Grado <select id="card-thinking" title="Cuánto razona el modelo antes de responder"></select></label>
+    </div>
+    <button id="card-model-confirm" type="button" disabled>Confirmar modelo y potencia</button>
+    <p id="card-model-status" class="hint"></p>
+    <form id="card-questions" class="question-form" hidden></form>
+    <div id="card-message-block">
+      <label><span id="card-message-label">Mensaje para este agente</span><textarea id="card-message" rows="3" maxlength="131072"></textarea></label>
+      <div class="row">
+        <button id="card-steer" type="button" title="Se entrega en cuanto el agente pueda leerlo">Enviar ahora</button>
+        <button id="card-follow" type="button" title="Se entrega cuando el agente termine lo actual">Al terminar</button>
+      </div>
+    </div>
+    <p id="card-result" class="hint" role="status"></p>
+  </section>
+  <section id="project" class="panel card" hidden>
+    <header><strong id="project-name"></strong><button id="project-close" type="button" aria-label="Cerrar proyecto">×</button></header>
+    <form id="project-name-form" class="name-form">
+      <label>Nombre de la mesa <input id="project-name-input" type="text" maxlength="48" autocomplete="off" placeholder="Nombre original"></label>
+      <button id="project-name-save" type="submit">Guardar nombre</button>
+      <p class="hint">Déjalo vacío para recuperar el nombre original.</p>
+      <p id="project-name-result" class="hint" role="status"></p>
+    </form>
+    <dl>
+      <dt>Tipo</dt><dd>Proyecto</dd>
+      <dt>Carpeta</dt><dd id="project-cwd"></dd>
+      <dt>Agentes</dt><dd id="project-count"></dd>
+    </dl>
+    <strong id="project-members-title">Gatos asignados</strong>
+    <ul id="project-members" class="project-cats"></ul>
+  </section>
+  <section id="history" class="panel history" hidden>
+    <header><strong>Conversaciones de los últimos 7 días</strong><button id="history-close" type="button" aria-label="Cerrar historial">×</button></header>
+    <table><thead><tr><th>Proyecto</th><th>Conversación</th><th>Carpeta</th><th>Estado</th><th></th></tr></thead><tbody id="history-rows"></tbody></table>
+    <p id="history-result" class="hint" role="status"></p>
+  </section>
+  <section id="boss" class="panel history usage" hidden>
+    <header><strong>Jefe humano · Usage de omp</strong><button id="boss-close" type="button" aria-label="Cerrar usage">×</button></header>
+    <p id="boss-workload" class="hint"></p>
+    <button id="usage-refresh" type="button">Actualizar usage</button>
+    <p id="usage-status" class="hint" role="status"></p>
+    <pre id="usage-content"></pre>
+  </section>
+  <section id="setup" class="panel setup" hidden>
+    <header><strong id="setup-title">Ajustes</strong><button id="setup-close" type="button" aria-label="Cerrar ajustes">×</button></header>
+    <fieldset class="theme-picker" role="radiogroup" aria-label="Personajes de la oficina">
+      <legend>Personajes</legend>
+      <label><input type="radio" name="appearance-theme" value="animals"> Animales</label>
+      <label><input type="radio" name="appearance-theme" value="robots" checked> Robots</label>
+    </fieldset>
+    <div id="animal-controls">
+      <div class="tabs" role="tablist">
+        <button type="button" data-tab="breed" role="tab">Raza del perro</button>
+        <button type="button" data-tab="dog" role="tab">Ropa del perro</button>
+        <button type="button" data-tab="cat" role="tab">Ropa de los gatos</button>
+        <button type="button" data-tab="mouse" role="tab">Ropa de los ratones</button>
+        <span class="spacer"></span>
+        <button id="setup-default" type="button">Restablecer aspecto animal</button>
+      </div>
+      <div id="setup-options" class="options" role="radiogroup"></div>
+    </div>
+    <div id="robot-controls" hidden>
+      <div class="appearance-groups">
+        <fieldset class="appearance-group"><legend>Color de agentes</legend><div id="agent-robot-colors" class="options" role="radiogroup" aria-label="Color de agentes"></div></fieldset>
+        <fieldset class="appearance-group"><legend>Color de subagentes</legend><div id="subagent-robot-colors" class="options" role="radiogroup" aria-label="Color de subagentes"></div></fieldset>
+        <fieldset class="appearance-group"><legend>Género del jefe</legend><div id="human-genders" class="options" role="radiogroup" aria-label="Género del jefe"></div></fieldset>
+        <fieldset class="appearance-group"><legend>Tono de piel del jefe</legend><div id="human-skins" class="options" role="radiogroup" aria-label="Tono de piel del jefe"></div></fieldset>
+        <fieldset class="appearance-group"><legend>Color de pelo del jefe</legend><div id="human-hair-colors" class="options" role="radiogroup" aria-label="Color de pelo del jefe"></div></fieldset>
+        <fieldset class="appearance-group"><legend>Estilo de pelo del jefe</legend><div id="human-hair-styles" class="options" role="radiogroup" aria-label="Estilo de pelo del jefe"></div></fieldset>
+      </div>
+    </div>
+    <p id="robot-appearance-note" class="hint" hidden>La raza y la ropa de Animales se conservan al cambiar de tema.</p>
+    <p id="setup-result" class="hint" role="status"></p>
+    <div class="row"><button id="setup-save" type="button" class="primary">Guardar</button></div>
+    <div class="window-settings" role="group" aria-label="Ajustes de ventana">
+      <label><input id="always-on-top" type="checkbox"> Siempre encima</label>
+      <button id="restore-bounds" type="button">Restaurar posición y tamaño</button>
+      <span class="hint">Arrastra los bordes para cambiar el tamaño.</span>
+    </div>
+  </section>
+</main>
+<script src="renderer.js"></script>
+</body>
+</html>
