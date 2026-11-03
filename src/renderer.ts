@@ -542,6 +542,16 @@ office.onVisibility(visible => scene.setVisible(visible));
 office.subscribe(apply);
 office.onBriefing(id => { if (!briefings.includes(id)) briefings.push(id); scene.offerBriefing(); renderNotices(); });
 void office.muted().then(value => { muted = value; $('mute').setAttribute('aria-pressed', String(muted)); $('mute').textContent = muted ? 'Silencio' : 'Sonido'; });
+function showAppUpdate(update: unknown) {
+  if (!update || typeof update !== 'object') return;
+  const { version, currentVersion } = update as { version?: unknown; currentVersion?: unknown };
+  if (typeof version !== 'string' || typeof currentVersion !== 'string' || !version.trim() || !currentVersion.trim()) return;
+  $('app-update-versions').textContent = `Versión instalada: ${currentVersion} · Nueva versión: ${version}`;
+  $('app-update-notice').hidden = false;
+}
+$('app-update-close').onclick = () => { $('app-update-notice').hidden = true; };
+$('app-update-open').onclick = () => { void office.openAppUpdate().catch(() => undefined); };
+void office.checkAppUpdate().then(showAppUpdate).catch(() => undefined);
 void office.snapshot().then(apply);
 // Connecting omp is an explicit user action: the office never changes omp on its own.
 void office.bridgeStatus().then(status => {

@@ -20,6 +20,7 @@ Aplicación de Windows que muestra las sesiones de omp como una oficina en pixel
 - **Mesas seleccionables.** Al pulsar una mesa se abre la ficha del proyecto con su nombre, carpeta y agentes asignados; al pulsar uno se abre su ficha. **Nombre de la mesa → Guardar nombre** cambia su nombre visual.
 - **Jefe y usage.** Pulsar tu personaje —perro en Animales, humano en Robots— abre las cuotas y límites reales de omp, equivalentes a `/usage`, con identificadores de cuenta ocultos. **Actualizar usage** vuelve a consultarlos.
 - **Estrés.** Tu personaje muestra una señal progresiva de estrés según los agentes y subagentes trabajando; disminuye cuando baja la carga.
+- **Actualizaciones.** Al abrirse, la oficina consulta la versión pública del repositorio. Si es más reciente, muestra un aviso con un enlace al repositorio; la instalación es manual. Sin conexión no interrumpe el inicio.
 
 ## Personalización
 
@@ -90,7 +91,12 @@ Estados de cada conversación:
 
 ## Desarrollo
 
-Bun 1.4.4 está en `.superpowers\tools\bun-windows-x64\`; no se modifica el PATH global.
+Para desarrollar desde una copia del repositorio, instala Bun siguiendo [sus instrucciones oficiales](https://bun.sh/docs/installation) y copia el ejecutable a la ubicación que usan la compilación y el instalador. Esa carpeta está excluida de Git.
+
+```powershell
+New-Item -ItemType Directory -Force '.superpowers\tools\bun-windows-x64'
+Copy-Item (Get-Command bun).Source '.superpowers\tools\bun-windows-x64\bun.exe'
+```
 
 ```powershell
 $bun = '.\.superpowers\tools\bun-windows-x64\bun.exe'
@@ -104,6 +110,8 @@ $bun = '.\.superpowers\tools\bun-windows-x64\bun.exe'
 ```
 
 `bun run dist` genera `release\win-unpacked\Oficina nter.exe` y un instalador NSIS que incluye Electron y Bun. El equipo de destino no necesita Node ni Bun instalados. Los ejecutables no están firmados.
+
+Para anunciar una nueva versión, incrementa `version` en `package.json` con tres números (`mayor.menor.parche`), comprueba y publica el código en la rama `main`. El aviso compara esa versión con la instalada; no detecta commits que no cambien el número. El repositorio contiene el código: para ofrecer un instalador descargable hay que compilarlo y publicarlo por separado.
 
 El icono de Windows es `assets\nter-logo.ico` (256, 128, 64, 48, 32 y 16 px), derivado de `assets\nter-logo.png`. Se incluye ya convertido porque el conversor de iconos de electron-builder se queda bloqueado al ejecutarse con Bun; si cambias el logo, regenera también el `.ico`.
 

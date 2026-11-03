@@ -13,6 +13,7 @@ import { AppearanceSchema } from './office/appearance.ts';
 import { OfficeNamesSchema, RenameSchema, catNameKey, projectNameKey, type OfficeNames } from './office/names.ts';
 import { fetchUsage } from './usage.ts';
 import { conversationAction } from './resume.ts';
+import { APP_UPDATE_URL, checkAppUpdate } from './app-update.ts';
 import { z } from 'zod';
 
 const dataDir = process.env.NTER_OFFICE_DATA ?? join(process.env.LOCALAPPDATA ?? homedir(), 'nter-omp-office');
@@ -229,6 +230,8 @@ ipcMain.handle('office:rename', (_event, value: unknown): OfficeNames => {
   return names;
 });
 ipcMain.handle('office:usage', () => fetchUsage());
+ipcMain.handle('office:check-app-update', () => checkAppUpdate(app.getVersion()));
+ipcMain.handle('office:open-app-update', async () => { try { await shell.openExternal(APP_UPDATE_URL); } catch {} });
 ipcMain.handle('office:always-on-top', () => preferences().alwaysOnTop);
 ipcMain.on('office:set-always-on-top', (_event, value: unknown) => {
   const alwaysOnTop = value === true;

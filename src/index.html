@@ -18,6 +18,14 @@
     <button id="close" type="button" aria-label="Cerrar oficina">×</button>
   </div>
   <div id="notices" class="notices" aria-live="assertive"></div>
+  <section id="app-update-notice" class="app-update-notice" role="status" aria-label="Actualización disponible" hidden>
+    <div class="app-update-heading">
+      <strong>Hay una nueva versión disponible</strong>
+      <button id="app-update-close" type="button" aria-label="Cerrar aviso de actualización">×</button>
+    </div>
+    <p id="app-update-versions"></p>
+    <button id="app-update-open" class="primary" type="button">Ver repositorio</button>
+  </section>
   <section id="card" class="panel card" hidden>
     <header><strong id="card-name"></strong><button id="card-close" type="button" aria-label="Cerrar ficha">×</button></header>
     <form id="cat-name-form" class="name-form">

@@ -15,6 +15,9 @@ button[aria-pressed="true"] { background: #d9dccd; }
 .notice.briefing { border-color: #7d6a3c; color: #5b4a22; background: #fbf5e3; }
 @media (prefers-reduced-motion: no-preference) { .notice.new { animation: pulse 1s ease-out 2; } }
 @keyframes pulse { 50% { transform: scale(1.04); } }
+.app-update-notice { position: absolute; z-index: 1; top: 40px; left: 10px; width: min(340px, calc(100% - 20px)); padding: 10px; border: 1px solid #7d6a3c; border-radius: 3px; background: #fbf5e3; color: #3f463f; box-shadow: 0 3px 10px #0002; -webkit-app-region: no-drag; }
+.app-update-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.app-update-notice p { margin: 8px 0; overflow-wrap: anywhere; }
 .panel { position: absolute; top: 34px; bottom: 8px; background: #f8f7f1; border: 1px solid #8c9882; box-shadow: 0 6px 22px #0003; padding: 8px 12px; overflow: auto; user-select: text; }
 .panel header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .card { right: 10px; width: 360px; }

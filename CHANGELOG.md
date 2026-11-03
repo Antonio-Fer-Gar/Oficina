@@ -4,6 +4,7 @@
 
 ### Added
 
+- Aviso al iniciar cuando la versión pública de la rama principal es más reciente, con enlace al repositorio y cierre manual; la consulta no bloquea el inicio ni envía credenciales.
 - La ficha muestra las preguntas pendientes de omp con sus opciones, descripciones, vistas previas y recomendación. Admite respuesta escrita, selección única o múltiple y varias preguntas en una solicitud.
 - Todos los ratones llevan gafas con cualquier prenda.
 - Botón **Confirmar modelo y potencia**: permite preparar ambos valores sin aplicarlos al cambiar los desplegables.
