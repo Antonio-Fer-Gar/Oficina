@@ -1,7 +1,10 @@
 // Pixel art ported from the approved mockup (office-project-arrivals-v13.html); scene units, no smoothing.
 export type Pose = 'stand' | 'sit' | 'coffee' | 'sofa';
 /** Optional scene-supplied gait/action phase. */
-export interface CharacterMotion { walking?: boolean; frame?: 0 | 1; activity?: ActivityKind; dragging?: boolean }
+export interface CharacterMotion {
+  walking?: boolean; frame?: 0 | 1; activity?: ActivityKind; dragging?: boolean;
+  zap?: 'windup' | 'crack' | 'recoil'; zapSide?: -1 | 1;
+}
 import { DEFAULT_HUMAN, DEFAULT_ROBOT_COLORS, type Breed, type HumanGender, type HumanHairColor, type HumanHairStyle, type HumanSkin, type Outfit, type RobotColor } from './appearance.ts';
 import type { ModelRef } from '../bridge/protocol.ts';
 import type { ActivityKind } from '../activity.ts';
@@ -59,6 +62,7 @@ const HUMAN_SUIT_BLACK = '#26313a';
 const HUMAN_SLEEVE = '#59636b';
 const HUMAN_COLLAR = '#f4f1e8';
 const HUMAN_STRESS = '#55b878';
+export const HUMAN_ZAP_HAND_OFFSET = { x: -23, y: -17 } as const;
 export class Painter {
   private readonly modelBadges = new WeakMap<ModelRef, ModelBadge>();
   private grokMark: Path2D | null = null;
@@ -69,6 +73,26 @@ export class Painter {
   rect(x: number, y: number, w: number, h: number, color: string) { this.c.fillStyle = color; this.c.fillRect(x, y, w, h); }
   text(value: string, x: number, y: number, color = '#555b53') {
     this.c.fillStyle = color; this.c.font = '7px monospace'; this.c.fillText(value, x, y);
+  }
+  electricZap(fromX: number, fromY: number, toX: number, toY: number, phase: number, scale: number, reducedMotion: boolean) {
+    const c = this.c, dx = toX - fromX, dy = toY - fromY, length = Math.hypot(dx, dy) || 1;
+    const pulse = Math.floor(phase * 8), flicker = reducedMotion || pulse % 2 === 0 ? 1 : 0.72;
+    const normalX = -dy / length, normalY = dx / length, segments = 6;
+    c.save(); c.globalAlpha = flicker; c.lineCap = 'square'; c.lineJoin = 'miter'; c.beginPath(); c.moveTo(Math.round(fromX), Math.round(fromY));
+    for (let i = 1; i <= segments; i++) {
+      const t = i / segments, offset = i === segments ? 0 : (i % 2 ? 1 : -1) * (3 + ((i + pulse) % 2) * 2) * scale;
+      c.lineTo(Math.round(fromX + dx * t + normalX * offset), Math.round(fromY + dy * t + normalY * offset));
+    }
+    c.strokeStyle = '#b56d28'; c.lineWidth = 5 * scale; c.stroke();
+    c.strokeStyle = '#ffda57'; c.lineWidth = 3 * scale; c.stroke();
+    c.strokeStyle = '#fff8c7'; c.lineWidth = Math.max(1, scale); c.stroke();
+    const x = Math.round(toX), y = Math.round(toY), s = scale;
+    this.rect(Math.round(x - 1.5 * s), Math.round(y - 1.5 * s), Math.round(3 * s), Math.round(3 * s), '#fffce5');
+    this.rect(Math.round(x - 5 * s), Math.round(y - s), Math.round(3 * s), Math.round(2 * s), '#ffcf42');
+    this.rect(Math.round(x + 2 * s), Math.round(y - s), Math.round(3 * s), Math.round(2 * s), '#ffcf42');
+    this.rect(Math.round(x - s), Math.round(y - 5 * s), Math.round(2 * s), Math.round(3 * s), '#ffcf42');
+    this.rect(Math.round(x - s), Math.round(y + 2 * s), Math.round(2 * s), Math.round(3 * s), '#ffcf42');
+    c.restore();
   }
   plant(x: number, y: number) {
     const R = this.rect.bind(this);
@@ -377,7 +401,20 @@ export class Painter {
     R(-4, -3, Math.max(1, Math.round(amount * 8)), 1, stressColor(HUMAN_STRESS, amount));
 
     if (pose === 'sit') {
-      if (motion?.dragging) {
+      if (motion?.zap) {
+        c.save();
+        if (motion.zapSide === 1) c.scale(-1, 1);
+        R(9, 1, 4, 6, HUMAN_SUIT); R(11, -4, 4, 5, HUMAN_SLEEVE); R(10, -7, 5, 4, skinColors.base);
+        R(-13, 1, 4, 6, HUMAN_SUIT);
+        if (motion.zap === 'windup') {
+          R(-15, -4, 4, 5, HUMAN_SLEEVE); R(-11, -10, 4, 5, HUMAN_SLEEVE); R(-8, -14, 5, 4, skinColors.base);
+        } else if (motion.zap === 'crack') {
+          R(-16, -3, 4, 5, HUMAN_SLEEVE); R(-21, -7, 5, 5, HUMAN_SLEEVE); R(-26, -9, 6, 4, skinColors.base);
+        } else {
+          R(-15, -4, 4, 5, HUMAN_SLEEVE); R(-19, -9, 4, 5, HUMAN_SLEEVE); R(-20, -13, 5, 4, skinColors.base);
+        }
+        c.restore();
+      } else if (motion?.dragging) {
         R(-13, 1, 4, 5, HUMAN_SUIT); R(-17, -2, 4, 5, HUMAN_SLEEVE); R(-21, -7, 5, 4, skinColors.base);
         R(9, 1, 4, 5, HUMAN_SUIT); R(13, -2, 4, 5, HUMAN_SLEEVE); R(17, -7, 5, 4, skinColors.base);
       } else {

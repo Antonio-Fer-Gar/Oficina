@@ -2,6 +2,12 @@
 
 ## Sin publicar
 
+## 0.1.9
+
+### Added
+
+- En el tema Robots, el jefe da un latigazo eléctrico al agente o subagente al recibir un mensaje; en Animales no se muestra el efecto.
+
 ## 0.1.8
 
 ### Added

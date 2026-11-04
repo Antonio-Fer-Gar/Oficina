@@ -22,6 +22,8 @@ let agents: AgentInfo[] = [], muted = false, selected: string | null = null;
 let selectedProject: string | null = null;
 let names: OfficeNames = { cats: {}, projects: {} }, projectMembersKey = '', usageLoading = false;
 const heard = new Set<string>(), briefings: string[] = [];
+const receivedMessages = new Map<string, number>(), deferredZaps: string[] = [];
+let appearanceReady = false;
 let questionFormKey: string | null = null, cardDisabled = false;
 const answerLocked = new Set<string>(), answerInFlight = new Set<string>();
 const PHASES: Omit<Record<AgentInfo['phase'], string>, 'asking-parent'> = {
@@ -63,11 +65,26 @@ function acknowledgeBriefings() {
   for (const id of briefings.splice(0)) void office.acknowledgeBriefing(id);
   scene.dismissBriefing(); renderNotices();
 }
+function showMessageZap(id: string) {
+  if (appearanceReady) scene.zap(id); else deferredZaps.push(id);
+}
 function apply(update: OfficeUpdate) {
   agents = update.agents;
   inventoryComplete = update.complete;
   syncOffice(state, agents, update.complete);
   scene.update(state);
+  const live = new Set<string>();
+  for (const info of agents) {
+    const id = agentKey(info.ref), count = info.receivedMessages;
+    live.add(id);
+    if (count === undefined) continue;
+    const previous = receivedMessages.get(id);
+    const fresh = info.lastMessageAt !== undefined && Date.now() - info.lastMessageAt >= 0 && Date.now() - info.lastMessageAt < 5000;
+    const received = previous === undefined ? (count > 0 && fresh ? 1 : 0) : Math.max(0, count - previous);
+    receivedMessages.set(id, count);
+    for (let i = 0; i < received; i++) showMessageZap(id);
+  }
+  if (update.complete) for (const id of receivedMessages.keys()) if (!live.has(id)) receivedMessages.delete(id);
   renderWorkload();
   if (selectedProject) {
     const project = state.projects.get(selectedProject);
@@ -364,6 +381,7 @@ async function submitAnswer(info: AgentInfo, request: PendingQuestion, answers: 
   const result = await office.send({
     id: crypto.randomUUID(), type: 'answer', ref: info.ref, requestId: request.requestId, answers,
   }).catch(failure);
+  if (result.ok) showMessageZap(actorId);
   answerInFlight.delete(key);
   const stillPending = pendingQuestion(state.actors.get(actorId)?.info)?.requestId === request.requestId;
   if (!stillPending) { answerLocked.delete(key); return; }
@@ -799,5 +817,11 @@ void office.appearance().then(saved => {
   scene.setAppearance(appearance);
   updateThemeText();
   if (!saved?.theme) openCustomize(true); // first run or legacy record without a theme
+}).catch(error => {
+  console.error('No se pudo cargar la apariencia:', error);
+}).finally(() => {
+  appearanceReady = true;
+  for (const id of deferredZaps) scene.zap(id);
+  deferredZaps.length = 0;
 });
 logo.addEventListener('load', () => { if (!$('setup').hidden) renderOptions(); });

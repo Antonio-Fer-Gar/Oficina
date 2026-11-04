@@ -1,5 +1,5 @@
 import { advanceOffice, type Actor, type OfficeState, type Project } from '../state.ts';
-import { COATS, Painter, type Pose } from './sprites.ts';
+import { COATS, HUMAN_ZAP_HAND_OFFSET, Painter, type CharacterMotion, type Pose } from './sprites.ts';
 import { DEFAULT_APPEARANCE, type Appearance } from './appearance.ts';
 import { actorName, moleActor, projectName, type OfficeNames } from './names.ts';
 import { workloadStress } from './workload.ts';
@@ -7,6 +7,7 @@ import { resolveActivity } from '../activity.ts';
 
 export interface SceneLayout { unit: number; scale: number; worldWidth: number; roomWidth: number; bossX: number }
 export interface Point { x: number; y: number }
+type ZapEffect = { actorId: string; startedAt: number | null; motion: CharacterMotion };
 /** Scale both rooms together while keeping the floor anchored to the bottom edge. */
 export function computeLayout(contentWidth: number, viewport: { width: number; height: number }, scale?: number, requestedRoomWidth = 210): SceneLayout {
   const unit = viewport.height / 180, visible = viewport.width / unit;
@@ -45,6 +46,7 @@ export function hitTest(layout: SceneLayout, point: Point, actors: Iterable<{ id
 
 export interface SceneController {
   update(state: OfficeState): void;
+  zap(actorId: string): void;
   offerBriefing(): void;
   dismissBriefing(): void;
   setVisible(visible: boolean): void;
@@ -61,10 +63,30 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
   let messenger: { x: number; y: number; arrived: boolean } | null = null;
   let appearance: Appearance = DEFAULT_APPEARANCE;
   let names: OfficeNames = { cats: {}, projects: {} }, stress = 0;
+  const zaps: ZapEffect[] = [];
+  let activeZap: ZapEffect | null = null, zapProgress = 0;
+  const clearZaps = () => { zaps.length = 0; activeZap = null; zapProgress = 0; };
   const viewport = () => ({ width: canvas.clientWidth, height: canvas.clientHeight });
   const layout = () => computeLayout(state?.width ?? 1000, viewport(), scale, roomWidth);
   const wake = () => {
     if (visible && !frame) { last = performance.now(); frame = requestAnimationFrame(draw); }
+  };
+  const advanceZaps = (now: number) => {
+    if (!state || appearance.theme !== 'robots') { clearZaps(); return; }
+    activeZap = null; zapProgress = 0;
+    for (let i = zaps.length - 1; i >= 0; i--) if (!state.actors.has(zaps[i]!.actorId)) zaps.splice(i, 1);
+    const duration = reduced.matches ? 190 : 320;
+    while (zaps.length) {
+      const current = zaps[0]!, startedAt = current.startedAt ?? now;
+      current.startedAt = startedAt;
+      if (now - startedAt < duration) {
+        activeZap = current; zapProgress = (now - startedAt) / duration;
+        return;
+      }
+      const nextStart = startedAt + duration;
+      zaps.shift();
+      if (zaps.length && zaps[0]!.startedAt === null) zaps[0]!.startedAt = nextStart;
+    }
   };
   const draw = (now: number) => {
     frame = 0;
@@ -83,8 +105,15 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
       scale = reduced.matches ? target.scale : scale + (target.scale - scale) * blend;
       roomWidth = reduced.matches ? target.roomWidth : roomWidth + (target.roomWidth - roomWidth) * blend;
     }
+    advanceZaps(now);
     const limbFrame = (Math.floor((state?.time ?? now / 1000) * 6) % 2) as 0 | 1;
     const l = layout();
+    const zapTarget = activeZap ? state?.actors.get(activeZap.actorId) : undefined;
+    const zapSide: -1 | 1 = zapTarget && zapTarget.x > l.bossX ? 1 : -1;
+    if (activeZap) {
+      activeZap.motion.zapSide = zapSide;
+      activeZap.motion.zap = reduced.matches ? 'crack' : zapProgress < 0.14 ? 'windup' : zapProgress < 0.82 ? 'crack' : 'recoil';
+    }
     context.setTransform(ratio * l.unit, 0, 0, ratio * l.unit, 0, 0);
     painter.floor(size.width / l.unit + 1);
     context.save();
@@ -92,7 +121,7 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
     painter.breakRoom(l.roomWidth);
     painter.desk(l.bossX, 68); painter.chair(l.bossX, 94);
     painter.character(l.bossX, 99, appearance.theme === 'robots' ? { kind: 'human', stress, ...appearance.human } :
-      { kind: 'dog', breed: appearance.breed, stress }, appearance.outfits.dog, 'sit');
+      { kind: 'dog', breed: appearance.breed, stress }, appearance.outfits.dog, 'sit', activeZap?.motion);
     painter.text('TÚ', l.bossX - 4, 146);
     if (state) {
       for (const project of state.projects.values()) {
@@ -131,6 +160,19 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
         if (actor.stage === 'consult') painter.bubble(23, -24, '?', '#5b7a96');
         context.restore();
       }
+      if (activeZap && zapTarget && (reduced.matches || (zapProgress >= 0.14 && zapProgress < 0.82))) {
+        const characterScale = zapTarget.info.parent ? 0.78 : 1;
+        const pose: Pose = zapTarget.stage === 'seated' && !zapTarget.moving ? 'sit'
+          : zapTarget.stage === 'coffee' && !zapTarget.moving ? zapTarget.sofaSlot !== null ? 'sofa' : 'coffee' : 'stand';
+        const bob = zapTarget.moving && !reduced.matches ? Math.round(Math.sin(state.time * 11)) : 0;
+        const headY = pose === 'sit' ? -17 : pose === 'sofa' ? -19 : -22;
+        const targetX = zapTarget.x + (zapSide === -1 ? 11 : -11) * characterScale;
+        const targetY = zapTarget.y + 31 * (1 - characterScale) + (bob + headY) * characterScale;
+        const handX = (l.bossX + HUMAN_ZAP_HAND_OFFSET.x * (zapSide === 1 ? -1 : 1)) * l.scale;
+        const handY = 180 + (99 + HUMAN_ZAP_HAND_OFFSET.y - 180) * l.scale;
+        painter.electricZap(handX, handY, targetX * l.scale, 180 + (targetY - 180) * l.scale,
+          reduced.matches ? 0 : (zapProgress - 0.14) / 0.68, l.scale, reduced.matches);
+      }
       // Paint all labels last so the front row cannot cover the names behind it.
       for (const actor of actors) {
         const position = toScreen(l, actor), label = actorName(actor, names).toUpperCase().slice(0, 12);
@@ -166,7 +208,7 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
       animating ||= !reduced.matches && !actor.moving && (actor.stage === 'seated' || actor.stage === 'waiting') &&
         resolveActivity(actor.info) !== 'none';
     }
-    if (visible && (resizing || moving || animating || (messenger && !messenger.arrived))) frame = requestAnimationFrame(draw);
+    if (visible && (resizing || moving || animating || (messenger && !messenger.arrived) || zaps.length)) frame = requestAnimationFrame(draw);
   };
   const click = (event: MouseEvent) => {
     if (!state) return;
@@ -186,15 +228,23 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
   wake();
   return {
     update(next) { state = next; stress = workloadStress([...next.actors.values()].filter(actor => !actor.departing).map(actor => actor.info)); wake(); },
+    zap(actorId) {
+      if (visible && appearance.theme === 'robots' && state?.actors.has(actorId)) {
+        zaps.push({ actorId, startedAt: null, motion: {} }); wake();
+      }
+    },
     offerBriefing() { if (!messenger) messenger = { x: -20, y: 124, arrived: false }; wake(); },
     dismissBriefing() { messenger = null; wake(); },
-    setAppearance(next) { appearance = next; wake(); },
+    setAppearance(next) { appearance = next; if (next.theme !== 'robots') clearZaps(); wake(); },
     setNames(next) { names = next; wake(); },
     setVisible(next) {
       visible = next;
       if (next) wake();
-      else if (frame) { cancelAnimationFrame(frame); frame = 0; }
+      else {
+        clearZaps();
+        if (frame) { cancelAnimationFrame(frame); frame = 0; }
+      }
     },
-    dispose() { if (frame) cancelAnimationFrame(frame); frame = 0; visible = false; resize.disconnect(); reduced.removeEventListener('change', wake); logo.removeEventListener('load', wake); canvas.removeEventListener('click', click); },
+    dispose() { clearZaps(); if (frame) cancelAnimationFrame(frame); frame = 0; visible = false; resize.disconnect(); reduced.removeEventListener('change', wake); logo.removeEventListener('load', wake); canvas.removeEventListener('click', click); },
   };
 }

@@ -37,6 +37,10 @@ export const AgentInfoSchema = z.object({
   question: PendingQuestionSchema.nullable().optional(),
   /** Action of the live tools (see resolveActivity); missing from older bridges, which must show no action rather than a guess. */
   activityKind: ActivityKindSchema.optional(),
+  /** Count of live user-message events received for this agent identity since bridge startup. */
+  receivedMessages: z.number().int().nonnegative().optional(),
+  /** Unix timestamp in milliseconds of the latest live user-message event. */
+  lastMessageAt: z.number().int().nonnegative().optional(),
   /** Latest finished tool with an action, for a brief completion animation; never a running tool. */
   recentActivity: RecentActivitySchema.optional(),
 });

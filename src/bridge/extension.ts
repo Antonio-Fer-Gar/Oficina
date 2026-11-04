@@ -26,6 +26,10 @@ function tokenSavingSystemPrompt(systemPrompt: readonly string[]): string[] | un
   return [...systemPrompt, tokenSavingPolicy];
 }
 const records = new Map<string, Binding>();
+const messageStats = new Map<string, { count: number; lastMessageAt?: number }>();
+function agentRefKey(ref: AgentInfo['ref']) {
+  return `${ref.instanceId}\0${ref.generation}\0${ref.sessionId}\0${ref.agentId}`;
+}
 let host: BridgeHost | undefined;
 let launchChecked = false;
 const LauncherSchema = z.object({ command: z.string().min(1), args: z.array(z.string()), pid: z.number().int().positive().nullable(), installing: z.boolean().optional() });
@@ -198,13 +202,17 @@ export default function officeExtension(pi: ExtensionAPI) {
       if (binding) clearPendingQuestion(binding, binding.pendingAsk, true);
       const parent = ctx.agent.parentId ? records.get(ctx.agent.parentId)?.info.ref ?? null : null;
       const sessionId = ctx.sessionManager.getSessionId();
+      const ref = { instanceId, generation, sessionId, agentId: ctx.agent.id };
+      const stats = messageStats.get(agentRefKey(ref));
       const cwd = realpathSync.native(ctx.cwd);
       const root = ctx.agent.kind === 'main';
       const marker = 'nter-' + instanceId.slice(0, 8);
       binding = { pi, ctx, attention: new Set(), tools: new ActivityTracker(), pendingModel: null, pendingAsk: null, consultingUntil: 0, info: {
-        ref: { instanceId, generation, sessionId, agentId: ctx.agent.id }, parent,
+        ref, parent,
         name: ctx.agent.name ?? ctx.agent.id, cwd, model: null, thinking: null, phase: 'idle', activity: '',
         queued: 0, pendingAsync: false, runningChildren: 0, question: null,
+        receivedMessages: stats?.count ?? 0,
+        ...(stats?.lastMessageAt === undefined ? {} : { lastMessageAt: stats.lastMessageAt }),
         terminal: root && ctx.mode === 'tui' ? { pid: process.pid, startedAt, kind: process.env.WT_SESSION ? 'windows-terminal' : 'classic', wtSession: process.env.WT_SESSION, marker } : null,
         conversation: root ? { profile: process.env.OMP_PROFILE ?? process.env.PI_PROFILE ?? 'default', sessionId,
           project: basename(cwd) || cwd, cwd, title: pi.getSessionName() ?? sessionId,
@@ -293,6 +301,20 @@ export default function officeExtension(pi: ExtensionAPI) {
     await update(ctx);
     if (binding?.info.conversation) { binding.info.conversation.lastActiveAt = new Date().toISOString(); await persistMetadata(binding); }
   });
+  // message_start is emitted for live message arrivals, not when session history is restored.
+  // Count every user-role entry (including real agent prompts marked synthetic), never tool or assistant messages.
+  pi.on('message_start', (event, ctx) => {
+    if (event.message.role !== 'user') return;
+    const current = records.get(ctx.agent.id);
+    if (!current || current.info.ref.sessionId !== ctx.sessionManager.getSessionId()) return;
+    const key = agentRefKey(current.info.ref);
+    const stats = messageStats.get(key) ?? { count: 0 };
+    stats.count++;
+    stats.lastMessageAt = Date.now();
+    messageStats.set(key, stats);
+    current.info.receivedMessages = stats.count;
+    current.info.lastMessageAt = stats.lastMessageAt;
+  });
   pi.on('tool_execution_start', async (event, ctx) => {
     const saving = update(ctx);
     if (binding) {
@@ -322,6 +344,7 @@ export default function officeExtension(pi: ExtensionAPI) {
         await persistMetadata(current);
       }
     }
+    for (const key of messageStats.keys()) if (key.endsWith('\0' + ctx.agent.id)) messageStats.delete(key);
     records.delete(ctx.agent.id);
     if (ctx.agent.kind === 'main' && host) { await host.close(); host = undefined; }
   });
