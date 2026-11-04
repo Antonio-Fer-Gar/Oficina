@@ -8,7 +8,7 @@ import {
   type Appearance, type Breed, type HumanGender, type HumanHairColor, type HumanHairStyle, type HumanSkin, type Outfit, type RobotColor,
 } from './office/appearance.ts';
 import { agentKey, createOffice, isWorking, syncOffice, type Actor, type Project } from './state.ts';
-import { actorName, catNameKey, projectName, type OfficeNames } from './office/names.ts';
+import { actorName, catNameKey, moleActor, projectName, type OfficeNames } from './office/names.ts';
 
 declare global { interface Window { office: OfficeApi } }
 const office = window.office;
@@ -35,7 +35,7 @@ function renderStatus() {
   const projects = new Set(agents.map(agent => agent.cwd.toLowerCase())).size;
   const roots = agents.filter(agent => !agent.parent).length;
   const robots = activeTheme() === 'robots';
-  $('status').textContent = `${projects} proyectos · ${roots} ${robots ? 'agentes robot' : 'gatos'} · ${agents.length - roots} ${robots ? 'subagentes robot' : 'ratones'}` +
+  $('status').textContent = `${projects} proyectos · ${roots} ${robots ? 'agentes robot' : 'agentes'} · ${agents.length - roots} ${robots ? 'subagentes robot' : 'ratones'}` +
     (inventoryComplete ? '' : ' · inventario incompleto');
 }
 function renderWorkload() {
@@ -45,7 +45,7 @@ function renderWorkload() {
 function updateThemeText() {
   const robots = activeTheme() === 'robots';
   $('agent-name-label').textContent = robots ? 'Nombre del agente robot' : 'Nombre del gato';
-  $('project-members-title').textContent = robots ? 'Agentes robot asignados' : 'Gatos asignados';
+  $('project-members-title').textContent = robots ? 'Agentes robot asignados' : 'Agentes asignados';
   renderStatus(); renderWorkload();
   const actor = selected ? state.actors.get(selected) : undefined;
   if (actor) fillCard(actor);
@@ -246,10 +246,12 @@ function disableCard(disabled: boolean) {
 }
 function fillCard(actor: Actor) {
   const info = actor.info;
+  const isMole = !info.parent && activeTheme() === 'animals' && actor === moleActor(state.actors.values(), names);
+  $('agent-name-label').textContent = activeTheme() === 'robots' ? 'Nombre del agente robot' : isMole ? 'Nombre del topo' : 'Nombre del gato';
   $('card-name').textContent = info.parent ? info.name : actorName(actor, names) + (info.connected === false ? '' : ' · ' + info.name);
   $('card-role').textContent = activeTheme() === 'robots'
     ? info.parent ? 'Subagente robot' : 'Agente robot'
-    : info.parent ? 'Subagente (rata)' : 'Agente (gato)';
+    : info.parent ? 'Subagente (rata)' : isMole ? 'Agente (topo)' : 'Agente (gato)';
   const project = state.projects.get(actor.project);
   $('card-project').textContent = (project ? projectName(project, names) : info.conversation?.project ?? info.cwd) + ' · ' + info.cwd;
   $('card-session').textContent = info.ref.sessionId;
@@ -494,7 +496,7 @@ function fillProject(project: Project) {
     }
     if (!roots.length) {
       const item = document.createElement('li');
-      item.textContent = `No hay ${robots ? 'agentes robot' : 'gatos'} asignados; solo ${robots ? 'subagentes robot' : 'subagentes'}.`;
+      item.textContent = `No hay ${robots ? 'agentes robot' : 'agentes'} asignados; solo ${robots ? 'subagentes robot' : 'subagentes'}.`;
       list.append(item);
     }
   }

@@ -107,7 +107,7 @@ export class Painter {
     R(0, 0, width, 20, '#dedfce'); R(0, 19, width, 4, '#8b9980');
   }
   /** `who` selects an animal, a role-coloured robot, or the seated human lead. */
-  character(x: number, y: number, who: { kind: 'cat'; coat: string } | { kind: 'mouse' } | { kind: 'dog'; breed: Breed; stress?: number } | { kind: 'robot'; role: 'agent' | 'subagent'; color?: RobotColor } | { kind: 'human'; stress?: number; skin?: HumanSkin; hair?: HumanHairColor; style?: HumanHairStyle; gender?: HumanGender }, outfit: Outfit | 'messenger', pose: Pose, motion?: CharacterMotion) {
+  character(x: number, y: number, who: { kind: 'cat'; coat: string } | { kind: 'mole' } | { kind: 'mouse' } | { kind: 'dog'; breed: Breed; stress?: number } | { kind: 'robot'; role: 'agent' | 'subagent'; color?: RobotColor } | { kind: 'human'; stress?: number; skin?: HumanSkin; hair?: HumanHairColor; style?: HumanHairStyle; gender?: HumanGender }, outfit: Outfit | 'messenger', pose: Pose, motion?: CharacterMotion) {
     const c = this.c, R = this.rect.bind(this);
     c.save(); c.translate(Math.round(x), Math.round(y));
     this.lastRobot = who.kind === 'robot';
@@ -122,8 +122,8 @@ export class Painter {
     }
     const dog = who.kind === 'dog' ? stressedDogStyle(who.breed, who.stress) : null;
     const baseDog = who.kind === 'dog' ? DOGS[who.breed] : null;
-    const fur = who.kind === 'cat' ? who.coat : baseDog ? baseDog.fur : '#aba5ae';
-    const face = who.kind === 'cat' ? who.coat : baseDog ? baseDog.face : '#c9c1c5';
+    const fur = who.kind === 'cat' ? who.coat : who.kind === 'mole' ? '#74636a' : baseDog ? baseDog.fur : '#aba5ae';
+    const face = who.kind === 'cat' ? who.coat : who.kind === 'mole' ? '#a98f8b' : baseDog ? baseDog.face : '#c9c1c5';
     const frame = motion?.frame ?? 0;
     const activeTool = motion?.activity !== undefined && motion.activity !== 'none' && motion.activity !== 'thinking';
     const armShift = frame === 1 ? 2 : 0;
@@ -154,6 +154,7 @@ export class Painter {
           R(-15, -10, 8, dog.longEars ? 25 : 21, dog.ear); R(10, -10, 8, dog.longEars ? 25 : 21, dog.ear);
         }
       }
+      if (who.kind === 'mole') { R(-8, -13, 18, 5, fur); R(-5, -15, 12, 3, fur); }
       R(-11, -9, 24, 14, dog?.fur ?? fur);
       if (dog?.saddle) R(-10, -7, 22, 11, dog.saddle);
       R(-15, 12, 30, 14, '#747a7d'); R(-12, 14, 24, 9, '#a6aaab');
@@ -197,7 +198,12 @@ export class Painter {
       R(-13, 17, 5, 5, fur); R(11, 17, 5, 5, fur);
     }
     if (dog) this.dogHead(dog);
-    else {
+    else if (who.kind === 'mole') {
+      R(-10, -13, 22, 3, fur); R(-13, -10, 28, 11, fur); R(-10, 1, 22, 5, fur);
+      R(-6, -6, 2, 2, '#292a30'); R(6, -6, 2, 2, '#292a30');
+      R(-5, -2, 12, 6, face); R(-3, -3, 8, 4, '#d59d9b'); R(-1, -4, 4, 3, '#e1aaa6');
+      R(-14, 0, 6, 1, '#b8a2a1'); R(10, 0, 6, 1, '#b8a2a1');
+    } else {
       if (who.kind === 'cat') { R(-13, -17, 8, 13, fur); R(6, -17, 8, 13, fur); R(-11, -14, 4, 6, '#d68d84'); R(8, -14, 4, 6, '#d68d84'); }
       else { R(-15, -17, 11, 11, fur); R(6, -17, 11, 11, fur); R(-12, -15, 6, 7, '#d8a4a8'); R(8, -15, 6, 7, '#d8a4a8'); }
       R(-11, -9, 24, 14, fur); R(-8, -7, 18, 13, face); R(-5, -3, 2, 3, '#41464b'); R(6, -3, 2, 3, '#41464b'); R(0, 2, 3, 2, '#cb9292');
@@ -540,9 +546,9 @@ function stressColor(color: string, amount: number): string {
   const channel = (shift: number, target: number) => Math.round(((rgb >> shift) & 0xff) * (1 - amount) + target * amount);
   return `#${channel(16, 255).toString(16).padStart(2, '0')}${channel(8, 32).toString(16).padStart(2, '0')}${channel(0, 32).toString(16).padStart(2, '0')}`;
 }
-// The first seven names were chosen by the user; the rest are Spanish names for larger offices.
-const CAT_NAMES = ['Pablo', 'Oscar', 'Antonio', 'Javi', 'Álvaro', 'Alex', 'Mihai',
-  'Lucía', 'Sergio', 'Carmen', 'Diego', 'Marta', 'Raúl', 'Elena', 'Iván', 'Nuria', 'Hugo', 'Paula', 'Jorge', 'Irene', 'Laura', 'Nono'];
+// Automatic names in arrival order; reuse freed names before assigning new ones.
+const CAT_NAMES = ['Oscar', 'Nono', 'Pablo', 'Antonio', 'Javi', 'Álvaro', 'Alex', 'Mihai',
+  'Lucía', 'Sergio', 'Carmen', 'Diego', 'Marta', 'Raúl', 'Elena', 'Iván', 'Nuria', 'Hugo', 'Paula', 'Jorge', 'Irene', 'Laura'];
 export function catName(order: number): string {
   return CAT_NAMES[order % CAT_NAMES.length]! + (order >= CAT_NAMES.length ? ' ' + (Math.floor(order / CAT_NAMES.length) + 1) : '');
 }

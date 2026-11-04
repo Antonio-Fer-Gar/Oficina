@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { actorName, catNameKey, OfficeNamesSchema, projectName, projectNameKey, RenameSchema } from '../src/office/names.ts';
+import { actorName, catNameKey, moleActor, OfficeNamesSchema, projectName, projectNameKey, RenameSchema } from '../src/office/names.ts';
 import { createOffice, syncOffice } from '../src/state.ts';
 import type { AgentInfo } from '../src/bridge/protocol.ts';
 
@@ -16,10 +16,29 @@ test('cat aliases survive process reconnection and do not rename another convers
   const names = OfficeNamesSchema.parse({ cats: { [catNameKey(first)]: 'Lince' }, projects: {} });
   const state = createOffice(); syncOffice(state, [first, other, otherProfile]);
   const actors = [...state.actors.values()];
-  expect(actors.map(actor => actorName(actor, names))).toEqual(['Lince', 'Oscar', 'Antonio']);
+  expect(actorName(actors[0]!, names)).toBe('Lince');
   syncOffice(state, [{ ...first, ref: { ...first.ref, instanceId: 'restarted', generation: 'two' } }]);
   expect(actorName([...state.actors.values()][0]!, names)).toBe('Lince');
-  expect(actorName([...state.actors.values()][0]!, { cats: {}, projects: {} })).toBe('Pablo');
+});
+
+test('only the earliest main agent named Pablo is the mole, including renamed agents', () => {
+  const first = agent('first'), second = agent('second'), state = createOffice();
+  syncOffice(state, [first, second]);
+  const actors = [...state.actors.values()];
+  const names = { cats: { [catNameKey(first)]: 'Pablo', [catNameKey(second)]: 'Pablo' }, projects: {} };
+  expect(moleActor(actors.toReversed(), names)).toBe(actors[0]);
+  names.cats[catNameKey(first)] = 'Otro nombre';
+  expect(moleActor(actors, names)).toBe(actors[1]);
+  names.cats[catNameKey(second)] = 'Otro nombre';
+  expect(moleActor(actors, names)).toBeUndefined();
+});
+
+test('automatic main agents start with Oscar, Nono and Pablo the mole', () => {
+  const state = createOffice();
+  syncOffice(state, [agent('first'), agent('second'), agent('third')]);
+  const actors = [...state.actors.values()], names = { cats: {}, projects: {} };
+  expect(actors.map(actor => actorName(actor, names))).toEqual(['Oscar', 'Nono', 'Pablo']);
+  expect(moleActor(actors, names)).toBe(actors[2]);
 });
 
 test('project names follow canonical folder identity while invalid visual names are rejected', () => {

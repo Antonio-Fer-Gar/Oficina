@@ -20,6 +20,15 @@ export function projectNameKey(cwd: string): string {
 export function actorName(actor: Actor, names: OfficeNames): string {
   return actor.info.parent ? actor.info.name : names.cats[catNameKey(actor.info)] || catName(actor.nameIndex);
 }
+/** Only one main agent can be the mole, even if several were renamed Pablo. */
+export function moleActor(actors: Iterable<Actor>, names: OfficeNames): Actor | undefined {
+  let mole: Actor | undefined;
+  for (const actor of actors) {
+    if (!actor.info.parent && actorName(actor, names).trim().toLowerCase() === 'pablo' &&
+      (!mole || actor.order < mole.order)) mole = actor;
+  }
+  return mole;
+}
 export function projectName(project: Project, names: OfficeNames): string {
   return names.projects[project.id] || project.name;
 }

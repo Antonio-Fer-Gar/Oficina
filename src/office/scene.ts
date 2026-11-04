@@ -1,7 +1,7 @@
 import { advanceOffice, type Actor, type OfficeState, type Project } from '../state.ts';
 import { COATS, Painter, type Pose } from './sprites.ts';
 import { DEFAULT_APPEARANCE, type Appearance } from './appearance.ts';
-import { actorName, projectName, type OfficeNames } from './names.ts';
+import { actorName, moleActor, projectName, type OfficeNames } from './names.ts';
 import { workloadStress } from './workload.ts';
 import { resolveActivity } from '../activity.ts';
 
@@ -103,6 +103,7 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
     context.restore();
     if (state) {
       const actors = [...state.actors.values()].sort((a, b) => a.y - b.y);
+      const mole = appearance.theme === 'animals' ? moleActor(actors, names) : undefined;
       for (const actor of actors) {
         const bob = actor.moving && !reduced.matches ? Math.round(Math.sin(state.time * 11)) : 0;
         const position = toScreen(l, actor);
@@ -120,7 +121,7 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
         context.translate(0, 31 * (1 - characterScale)); context.scale(characterScale, characterScale);
         painter.character(0, bob, appearance.theme === 'robots'
           ? { kind: 'robot', role: root ? 'agent' : 'subagent', color: root ? appearance.robotColors?.agent : appearance.robotColors?.subagent }
-          : root ? { kind: 'cat', coat: COATS[actor.order % COATS.length]! } : { kind: 'mouse' },
+          : root ? actor === mole ? { kind: 'mole' } : { kind: 'cat', coat: COATS[actor.order % COATS.length]! } : { kind: 'mouse' },
           root ? appearance.outfits.cat : appearance.outfits.mouse, pose,
           { walking: actor.moving, frame: limbFrame, activity, dragging });
         if (activity !== 'none') painter.activityProp(0, bob, activity, pose === 'sit', state.time, reduced.matches);

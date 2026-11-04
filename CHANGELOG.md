@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+## 0.1.8
+
+### Added
+
+- En el tema de animales, el agente llamado Pablo aparece como un topo con la misma ropa y animaciones que los demás agentes.
+- Los primeros nombres automáticos son Oscar, Nono y Pablo, en ese orden.
+
 ## 0.1.7
 
 ### Added
