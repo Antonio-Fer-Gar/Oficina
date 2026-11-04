@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ConversationSchema } from '../conversation.ts';
-import { ActivityKindSchema, RecentActivitySchema } from '../activity.ts';
+import { ActivityDescriptionSchema, ActivityKindSchema, RecentActivitySchema } from '../activity.ts';
 
 const Id = z.string().min(1).max(4096).refine(value => !value.includes('\0'));
 export const AgentRefSchema = z.object({ instanceId: Id, generation: Id, sessionId: Id, agentId: Id });
@@ -37,6 +37,8 @@ export const AgentInfoSchema = z.object({
   question: PendingQuestionSchema.nullable().optional(),
   /** Action of the live tools (see resolveActivity); missing from older bridges, which must show no action rather than a guess. */
   activityKind: ActivityKindSchema.optional(),
+  /** Safe brief description for the active tool; omitted by older bridges. */
+  activityDescription: ActivityDescriptionSchema.optional(),
   /** Count of live user-message events received for this agent identity since bridge startup. */
   receivedMessages: z.number().int().nonnegative().optional(),
   /** Unix timestamp in milliseconds of the latest live user-message event. */

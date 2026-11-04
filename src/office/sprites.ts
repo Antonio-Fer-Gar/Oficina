@@ -2,9 +2,10 @@
 export type Pose = 'stand' | 'sit' | 'coffee' | 'sofa';
 /** Optional scene-supplied gait/action phase. */
 export interface CharacterMotion {
-  walking?: boolean; frame?: 0 | 1; activity?: ActivityKind; dragging?: boolean;
+  walking?: boolean; frame?: 0 | 1; activity?: ActivityKind; dragging?: boolean; focus?: number;
   zap?: 'windup' | 'crack' | 'recoil'; zapSide?: -1 | 1;
 }
+export interface ActivityBubbleLayout { lines: string[]; width: number; height: number }
 import { DEFAULT_HUMAN, DEFAULT_ROBOT_COLORS, type Breed, type HumanGender, type HumanHairColor, type HumanHairStyle, type HumanSkin, type Outfit, type RobotColor } from './appearance.ts';
 import type { ModelRef } from '../bridge/protocol.ts';
 import type { ActivityKind } from '../activity.ts';
@@ -62,9 +63,10 @@ const HUMAN_SUIT_BLACK = '#26313a';
 const HUMAN_SLEEVE = '#59636b';
 const HUMAN_COLLAR = '#f4f1e8';
 const HUMAN_STRESS = '#55b878';
-export const HUMAN_ZAP_HAND_OFFSET = { x: -23, y: -17 } as const;
+export const HUMAN_ZAP_HAND_OFFSET = { x: -35, y: -18 } as const;
 export class Painter {
   private readonly modelBadges = new WeakMap<ModelRef, ModelBadge>();
+  private readonly activityBubbleLayouts = new Map<string, ActivityBubbleLayout>();
   private grokMark: Path2D | null = null;
   /** Fur of the latest `character`, so `activityProp` closes a paw of the same colour over the held tool. */
   private lastFur = '#aba5ae';
@@ -74,24 +76,57 @@ export class Painter {
   text(value: string, x: number, y: number, color = '#555b53') {
     this.c.fillStyle = color; this.c.font = '7px monospace'; this.c.fillText(value, x, y);
   }
+  activityBubbleLayout(description: string): ActivityBubbleLayout {
+    const cached = this.activityBubbleLayouts.get(description);
+    if (cached) return cached;
+    const c = this.c, maxWidth = 116, lines: string[] = [];
+    c.save(); c.font = '7px monospace';
+    let line = '';
+    for (const word of description.trim().split(/\s+/).filter(Boolean)) {
+      if (line && c.measureText(line + ' ' + word).width > maxWidth) { lines.push(line); line = ''; }
+      if (line) line += ' ';
+      for (const character of Array.from(word)) {
+        if (line && c.measureText(line + character).width > maxWidth) { lines.push(line); line = ''; }
+        line += character;
+      }
+    }
+    if (line) lines.push(line);
+    const textWidth = Math.ceil(Math.max(0, ...lines.map(text => c.measureText(text).width)));
+    c.restore();
+    const layout = { lines, width: textWidth + 8, height: lines.length * 8 + 9 };
+    if (this.activityBubbleLayouts.size >= 64) this.activityBubbleLayouts.clear();
+    this.activityBubbleLayouts.set(description, layout);
+    return layout;
+  }
+  activityBubble(x: number, y: number, layout: ActivityBubbleLayout) {
+    const c = this.c, bodyHeight = layout.height - 3;
+    this.rect(x, y, layout.width, bodyHeight, '#445047');
+    this.rect(x + 1, y + 1, layout.width - 2, bodyHeight - 2, '#fffdf5');
+    this.rect(x + 5, y + bodyHeight - 1, 3, 2, '#445047');
+    this.rect(x + 6, y + bodyHeight + 1, 1, 1, '#445047');
+    c.font = '7px monospace'; c.fillStyle = '#354139';
+    for (let i = 0; i < layout.lines.length; i++) c.fillText(layout.lines[i]!, x + 4, y + 9 + i * 8);
+  }
   electricZap(fromX: number, fromY: number, toX: number, toY: number, phase: number, scale: number, reducedMotion: boolean) {
     const c = this.c, dx = toX - fromX, dy = toY - fromY, length = Math.hypot(dx, dy) || 1;
-    const pulse = Math.floor(phase * 8), flicker = reducedMotion || pulse % 2 === 0 ? 1 : 0.72;
-    const normalX = -dy / length, normalY = dx / length, segments = 6;
+    const pulse = Math.floor(phase * 4), flicker = reducedMotion || pulse % 2 === 0 ? 1 : 0.85;
+    const normalX = -dy / length, normalY = dx / length, segments = 12, cycles = 4;
+    const amplitude = (4 + Math.sin(phase * Math.PI * 2)) * scale;
     c.save(); c.globalAlpha = flicker; c.lineCap = 'square'; c.lineJoin = 'miter'; c.beginPath(); c.moveTo(Math.round(fromX), Math.round(fromY));
     for (let i = 1; i <= segments; i++) {
-      const t = i / segments, offset = i === segments ? 0 : (i % 2 ? 1 : -1) * (3 + ((i + pulse) % 2) * 2) * scale;
+      const t = i / segments;
+      const offset = i === segments ? 0 : Math.sin(t * Math.PI * 2 * cycles + phase * Math.PI * 2) * amplitude;
       c.lineTo(Math.round(fromX + dx * t + normalX * offset), Math.round(fromY + dy * t + normalY * offset));
     }
-    c.strokeStyle = '#b56d28'; c.lineWidth = 5 * scale; c.stroke();
-    c.strokeStyle = '#ffda57'; c.lineWidth = 3 * scale; c.stroke();
-    c.strokeStyle = '#fff8c7'; c.lineWidth = Math.max(1, scale); c.stroke();
+    c.strokeStyle = '#0755b8'; c.lineWidth = 5 * scale; c.stroke();
+    c.strokeStyle = '#1498ff'; c.lineWidth = 3 * scale; c.stroke();
+    c.strokeStyle = '#dcf7ff'; c.lineWidth = Math.max(1, scale); c.stroke();
     const x = Math.round(toX), y = Math.round(toY), s = scale;
-    this.rect(Math.round(x - 1.5 * s), Math.round(y - 1.5 * s), Math.round(3 * s), Math.round(3 * s), '#fffce5');
-    this.rect(Math.round(x - 5 * s), Math.round(y - s), Math.round(3 * s), Math.round(2 * s), '#ffcf42');
-    this.rect(Math.round(x + 2 * s), Math.round(y - s), Math.round(3 * s), Math.round(2 * s), '#ffcf42');
-    this.rect(Math.round(x - s), Math.round(y - 5 * s), Math.round(2 * s), Math.round(3 * s), '#ffcf42');
-    this.rect(Math.round(x - s), Math.round(y + 2 * s), Math.round(2 * s), Math.round(3 * s), '#ffcf42');
+    this.rect(Math.round(x - 1.5 * s), Math.round(y - 1.5 * s), Math.round(3 * s), Math.round(3 * s), '#f3fbff');
+    this.rect(Math.round(x - 5 * s), Math.round(y - s), Math.round(3 * s), Math.round(2 * s), '#32b4ff');
+    this.rect(Math.round(x + 2 * s), Math.round(y - s), Math.round(3 * s), Math.round(2 * s), '#32b4ff');
+    this.rect(Math.round(x - s), Math.round(y - 5 * s), Math.round(2 * s), Math.round(3 * s), '#32b4ff');
+    this.rect(Math.round(x - s), Math.round(y + 2 * s), Math.round(2 * s), Math.round(3 * s), '#32b4ff');
     c.restore();
   }
   plant(x: number, y: number) {
@@ -105,6 +140,12 @@ export class Painter {
     R(x - 31, y - 9, 62, 17, '#f4f4ed'); R(x - 29, y - 7, 58, 2, '#ffffff'); R(x - 13, y - 26, 27, 22, '#4d5d59');
     R(x - 11, y - 24, 23, 17, '#a5c1af'); R(x - 8, y - 20, 12, 2, '#dce9c4'); R(x - 8, y - 15, 17, 2, '#819d8b');
     R(x - 1, y - 4, 4, 4, '#4d5d59'); R(x - 13, y + 3, 23, 4, '#ede7d4'); R(x + 21, y - 2, 7, 7, '#fff2d6'); R(x + 23, y - 4, 3, 2, '#887461');
+  }
+  manualZapButton(x: number, y: number) {
+    const R = this.rect.bind(this);
+    R(x - 6, y - 5, 12, 10, '#5a4a3d'); R(x - 5, y - 4, 10, 8, '#982c2a');
+    R(x - 4, y - 4, 8, 7, '#df443d'); R(x - 3, y - 3, 6, 5, '#ff7563');
+    R(x - 1, y - 2, 2, 3, '#fff1dc');
   }
   chair(x: number, y: number) {
     const R = this.rect.bind(this);
@@ -274,8 +315,8 @@ export class Painter {
     const { shell, light, shade } = ROBOT_PALETTES[color ?? DEFAULT_ROBOT_COLORS[role]];
     const dark = '#3b4a51';
     const frame = motion?.frame ?? 0;
-    const walking = motion?.walking === true, activeTool = motion?.activity !== undefined
-      && motion.activity !== 'none' && motion.activity !== 'thinking';
+    const walking = motion?.walking === true, working = motion?.activity !== undefined && motion.activity !== 'none';
+    const activeTool = working && motion?.activity !== 'thinking';
     if (pose === 'sit') c.translate(0, -10);
     else if (pose === 'sofa') c.translate(0, 3);
 
@@ -307,15 +348,41 @@ export class Painter {
     R(-5, 10, 2, 2, '#d5d6c9'); R(3, 10, 2, 2, '#d5d6c9');
 
     if (pose === 'sit') {
-      if (motion?.dragging) {
+      if (motion?.zap) {
+        const jolt = frame === 1 ? 2 : 0;
+        if (motion.zap === 'windup') {
+          R(-12, 1, 5, 5, shell); R(-15, -5, 5, 7, shade); R(-18, -15, 5, 8, light);
+          R(7, 1, 5, 5, shell); R(10, -5, 5, 7, shade); R(13, -15, 5, 8, light);
+        } else if (motion.zap === 'crack') {
+          R(-12, 1, 5, 5, shell); R(-18, -4, 6, 5, shade); R(-24, -9 + jolt, 7, 5, light);
+          R(7, 1, 5, 5, shell); R(13, -4, 6, 5, shade); R(19, -9 - jolt, 7, 5, light);
+        } else {
+          R(-12, 1, 5, 5, shell); R(-17, -5, 5, 6, shade); R(-20, -13, 5, 7, light);
+          R(7, 1, 5, 5, shell); R(12, -5, 5, 6, shade); R(15, -13, 5, 7, light);
+        }
+      } else if (motion?.dragging) {
         const reach = frame === 1 ? 2 : 0;
         R(-12, 1, 5, 5, shell); R(-16, -2, 5, 5, shade); R(-21, -7 + reach, 6, 5, light);
         R(7, 1, 5, 5, shell); R(11, -2, 5, 5, shade); R(15, -7 + reach, 6, 5, light);
-      } else if (activeTool) {
-        R(-11, 1, 4, 5, shell); R(-14, -4, 4, 6, shade); R(-17, -10, 5, 6, shell); R(-17, -14, 4, 4, light);
+      } else if (working) {
+        const tap = frame === 1 ? 2 : 0;
+        R(-11, 1, 4, 5, shell); R(-14, -4, 4, 6, shade); R(-16, -10 + tap, 5, 6, light);
+        R(7, 1, 4, 5, shell); R(10, -4, 4, 6, shade); R(11, -10 - tap, 5, 6, light);
       } else {
         R(-12, 1, 4, 6, shell); R(-14, -4, 4, 5, shade); R(-14, -7, 5, 4, light);
         R(8, 1, 4, 6, shell); R(10, -4, 4, 5, shade); R(9, -7, 5, 4, light);
+      }
+    } else if (motion?.zap) {
+      const jolt = frame === 1 ? 2 : 0;
+      if (motion.zap === 'windup') {
+        R(-12, 2, 5, 5, shell); R(-15, -5, 5, 8, shade); R(-18, -20, 5, 14, light);
+        R(7, 2, 5, 5, shell); R(10, -5, 5, 8, shade); R(13, -20, 5, 14, light);
+      } else if (motion.zap === 'crack') {
+        R(-12, 2, 5, 5, shell); R(-18, -4, 6, 5, shade); R(-25, -12 + jolt, 7, 5, light);
+        R(7, 2, 5, 5, shell); R(13, -4, 6, 5, shade); R(20, -12 - jolt, 7, 5, light);
+      } else {
+        R(-12, 2, 5, 5, shell); R(-17, -5, 5, 6, shade); R(-20, -18, 5, 12, light);
+        R(7, 2, 5, 5, shell); R(12, -5, 5, 6, shade); R(15, -18, 5, 12, light);
       }
     } else if (pose === 'sofa') {
       R(-13, 3, 5, 6, shell); R(-14, 9, 5, 7, shade); R(-12, 15, 5, 4, light);
@@ -359,8 +426,11 @@ export class Painter {
       R(-4, -28, 8, 1, ROBOT_BILL_SHADE); R(-5, -27, 10, 1, ROBOT_BILL);
       R(-6, -26, 12, 5, ROBOT_BILL); R(-5, -21, 10, 1, ROBOT_BILL);
       R(-4, -20, 8, 1, ROBOT_BILL_SHADE);
-      R(-2, -26, 4, 1, ROBOT_EYE); R(-3, -25, 6, 3, ROBOT_EYE);
-      R(-2, -22, 4, 1, ROBOT_EYE); R(-1, -25, 2, 2, ROBOT_EYE_HIGHLIGHT);
+      const focus = motion?.focus === undefined ? 0 : Math.round(1 + Math.sin(motion.focus * Math.PI * 1.4));
+      const eyeWidth = 6 + focus * 2, eyeHeight = 3 + focus;
+      R(-eyeWidth / 2 - 1, -26, eyeWidth + 2, eyeHeight + 2, '#304750');
+      R(-eyeWidth / 2, -25, eyeWidth, eyeHeight, ROBOT_EYE);
+      R(-eyeWidth / 2 + 1, -24, 2, 2, ROBOT_EYE_HIGHLIGHT);
       R(8, -24, 2, 2, '#3b4a51');
       R(-13, -17, 26, 2, ROBOT_BILL_LIGHT); R(-14, -15, 28, 3, ROBOT_BILL);
       R(-12, -12, 24, 2, ROBOT_BILL_SHADE);
@@ -407,11 +477,20 @@ export class Painter {
         R(9, 1, 4, 6, HUMAN_SUIT); R(11, -4, 4, 5, HUMAN_SLEEVE); R(10, -7, 5, 4, skinColors.base);
         R(-13, 1, 4, 6, HUMAN_SUIT);
         if (motion.zap === 'windup') {
-          R(-15, -4, 4, 5, HUMAN_SLEEVE); R(-11, -10, 4, 5, HUMAN_SLEEVE); R(-8, -14, 5, 4, skinColors.base);
+          R(-15, -4, 4, 5, HUMAN_SLEEVE); R(-17, -14, 4, 10, HUMAN_SLEEVE);
+          R(-19, -30, 6, 15, '#493127'); R(-18, -29, 4, 13, '#915b35');
+          R(-18, -27, 4, 1, '#c39868'); R(-18, -24, 4, 1, '#c39868');
+          R(-18, -19, 5, 4, skinColors.base);
         } else if (motion.zap === 'crack') {
           R(-16, -3, 4, 5, HUMAN_SLEEVE); R(-21, -7, 5, 5, HUMAN_SLEEVE); R(-26, -9, 6, 4, skinColors.base);
+          R(-36, -11, 14, 6, '#493127'); R(-35, -10, 12, 4, '#915b35');
+          R(-33, -10, 1, 4, '#c39868'); R(-30, -10, 1, 4, '#c39868');
+          R(-26, -9, 6, 4, skinColors.base);
         } else {
           R(-15, -4, 4, 5, HUMAN_SLEEVE); R(-19, -9, 4, 5, HUMAN_SLEEVE); R(-20, -13, 5, 4, skinColors.base);
+          R(-21, -23, 6, 14, '#493127'); R(-20, -22, 4, 12, '#915b35');
+          R(-20, -20, 4, 1, '#c39868'); R(-20, -17, 4, 1, '#c39868');
+          R(-20, -13, 5, 4, skinColors.base);
         }
         c.restore();
       } else if (motion?.dragging) {
@@ -430,7 +509,7 @@ export class Painter {
       R(9, 2, 4, 8, HUMAN_SUIT); R(10, 10, 4, 6, HUMAN_SLEEVE); R(10, 16, 4, 4, skinColors.base);
     }
 
-    // The lead remains rear-facing, with skin tone and haircut visible above the collar.
+    // Rear view at the desk; the appearance previews show the face.
     R(-7, -22, 14, 2, skinColors.shade); R(-10, -20, 20, 4, skinColors.shade);
     R(-11, -16, 22, 10, skinColors.shade); R(-9, -18, 18, 9, skinColors.base);
     R(-12, -14, 3, 5, skinColors.shade); R(9, -14, 3, 5, skinColors.shade);
@@ -444,6 +523,21 @@ export class Painter {
       }
     } else {
       R(-6, -19, 12, 1, skinColors.highlight);
+    }
+    if (pose !== 'sit') {
+      R(-7, -13, 4, 1, hairColor); R(3, -13, 4, 1, hairColor);
+      R(-6, -11, 2, 2, '#30343b'); R(4, -11, 2, 2, '#30343b');
+      R(-1, -10, 2, 2, skinColors.highlight);
+      if (gender === 'man') {
+        R(-9, -10, 2, 4, hairColor); R(7, -10, 2, 4, hairColor);
+        R(-7, -8, 14, 2, hairColor); R(-5, -6, 10, 2, hairColor);
+        R(-3, -9, 6, 1, hairColor); R(-2, -7, 4, 1, skinColors.shade);
+      } else {
+        R(-2, -7, 4, 1, skinColors.shade);
+      }
+    } else if (gender === 'man') {
+      // Sideburns follow the hair even when the crown is bald.
+      R(-11, -12, 2, 5, hairColor); R(9, -12, 2, 5, hairColor);
     }
 
     if (pose === 'sit') {

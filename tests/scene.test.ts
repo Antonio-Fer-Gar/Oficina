@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { computeLayout, hitTest, toScreen, toWorld } from '../src/office/scene.ts';
+import { computeLayout, hitTest, layoutActivityBubbles, nextAvailableZapActor, toScreen, toWorld, type SceneRect } from '../src/office/scene.ts';
 
 const viewport = { width: 1920, height: 360 };
 const contentFor = (projects: number, roomWidth = 210) => Math.max(1000, roomWidth + 50 + projects * 155 + 200);
@@ -37,6 +37,27 @@ test('actor and messenger clicks remain accurate at different display widths', (
     expect(hitTest(layout, screen(700, 108), actors, null)).toBeNull();
     expect(hitTest(layout, screen(400, 108), actors, { x: 400, y: 112 })).toBe('briefing');
   }
+});
+test('the desk zap button has hit-test priority without stealing nearby boss clicks', () => {
+  for (const size of [viewport, { width: 1280, height: 360 }]) {
+    const layout = computeLayout(contentFor(12), size);
+    const screen = (x: number, y: number) => toScreen(layout, { x, y });
+    const button = { x: layout.bossX - 22, y: 64 };
+    expect(hitTest(layout, screen(button.x, button.y), [], null, [], button)).toBe('zap');
+    expect(hitTest(layout, screen(layout.bossX - 14, 68), [], null, [], button)).toBe('boss');
+    expect(hitTest(layout, screen(layout.bossX, 99), [], null, [], button)).toBe('boss');
+  }
+});
+test('manual zap selection rotates over present actors and skips departing actors', () => {
+  const actors = [
+    { id: 'first', departing: false },
+    { id: 'leaving', departing: true },
+    { id: 'second', departing: false },
+  ];
+  expect(nextAvailableZapActor(actors, null)).toBe('first');
+  expect(nextAvailableZapActor(actors, 'first')).toBe('second');
+  expect(nextAvailableZapActor(actors, 'second')).toBe('first');
+  expect(nextAvailableZapActor([{ id: 'leaving', departing: true }], null)).toBeNull();
 });
 test('project desks resolve at any scale without stealing clicks from characters or absent desks', () => {
   const projects = [{ id: 'project', x: 400, installed: true }, { id: 'delivery', x: 600, installed: false }];
@@ -77,4 +98,31 @@ test('walking across the room doorway stays continuous and selectable', () => {
     previous = point;
   }
   expect(hitTest(layout, toScreen(layout, { x: layout.bossX, y: 99 }), [], null)).toBe('boss');
+});
+test('activity bubbles avoid labels, badges, existing bubbles and scene edges', () => {
+  const bounds: SceneRect = { x: 0, y: 0, width: 180, height: 130 };
+  const reserved: SceneRect[] = [
+    { x: 33, y: 34, width: 20, height: 20 }, // model badge
+    { x: 29, y: 82, width: 42, height: 10 }, // name label
+    { x: 61, y: 44, width: 15, height: 15 }, // attention bubble
+  ];
+  const placements = layoutActivityBubbles([
+    { id: 'agent', x: 54, y: 58, width: 58, height: 22 },
+    { id: 'subagent', x: 82, y: 63, width: 64, height: 22 },
+  ], reserved, bounds);
+  expect(placements).toHaveLength(2);
+  for (const placement of placements) {
+    expect(placement.x).toBeGreaterThanOrEqual(bounds.x);
+    expect(placement.y).toBeGreaterThanOrEqual(bounds.y);
+    expect(placement.x + placement.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+    expect(placement.y + placement.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+    for (const area of reserved) {
+      expect(placement.x + placement.width + 2 <= area.x || area.x + area.width + 2 <= placement.x ||
+        placement.y + placement.height + 2 <= area.y || area.y + area.height + 2 <= placement.y).toBe(true);
+    }
+  }
+  expect(placements[0]!.x + placements[0]!.width + 2 <= placements[1]!.x ||
+    placements[1]!.x + placements[1]!.width + 2 <= placements[0]!.x ||
+    placements[0]!.y + placements[0]!.height + 2 <= placements[1]!.y ||
+    placements[1]!.y + placements[1]!.height + 2 <= placements[0]!.y).toBe(true);
 });

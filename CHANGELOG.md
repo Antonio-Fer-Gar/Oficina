@@ -1,6 +1,20 @@
 # Changelog
 
-## Sin publicar
+## 0.1.10
+
+### Added
+
+- Bocadillos de actividad y skills para agentes y subagentes en ambos temas, con descripciones breves que evitan comandos, rutas y nombres sensibles.
+- Botón rojo en la mesa del jefe para lanzar latigazos manuales sin enviar mensajes; los personajes disponibles se alternan.
+- Animaciones de tecleo, descarga y enfoque de la cámara de los robots, respetando la reducción de movimiento.
+
+### Changed
+
+- Los robots en la sala de descanso mantienen el ojo quieto, sin animación de enfoque.
+- El latigazo es azul eléctrico y tiene una trayectoria más ondulada.
+- El latigazo eléctrico dura 1,2 segundos, con preparación y recogida más pausadas y menos parpadeo.
+- El látigo tiene un mango de cuero visible en las tres fases; el efecto eléctrico sale de su extremo.
+- La vista previa del jefe muestra la cara y aplica el color de pelo elegido a las cejas, las patillas, el bigote y la barba; las patillas también cambian en la vista de espaldas.
 
 ## 0.1.9
 
