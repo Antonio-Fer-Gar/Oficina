@@ -1,9 +1,10 @@
-import { app, BrowserWindow, ipcMain, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron';
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFile, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { AgentInfoSchema, AgentRefSchema, OfficeCommandSchema, type AgentInfo, type AgentRef } from './bridge/protocol.ts';
 import type { ConversationRecord } from './conversation.ts';
@@ -13,7 +14,7 @@ import { AppearanceSchema } from './office/appearance.ts';
 import { OfficeNamesSchema, RenameSchema, catNameKey, projectNameKey, type OfficeNames } from './office/names.ts';
 import { fetchUsage } from './usage.ts';
 import { conversationAction } from './resume.ts';
-import { APP_UPDATE_URL, checkAppUpdate } from './app-update.ts';
+import { checkAppUpdate, downloadInstaller, latestAppUpdate, type DownloadedUpdate } from './app-update.ts';
 import { z } from 'zod';
 
 const dataDir = process.env.NTER_OFFICE_DATA ?? join(process.env.LOCALAPPDATA ?? homedir(), 'nter-omp-office');
@@ -26,6 +27,11 @@ let history: ConversationRecord[] = [];
 const resuming = new Set<string>();
 let attention = new Set<string>();
 let quitting = false;
+let updateInstallInProgress = false;
+let installingUpdate = false;
+let updateSignalSent = false;
+let updateExitTimer: ReturnType<typeof setTimeout> | null = null;
+let updateHelper: ChildProcessWithoutNullStreams | null = null;
 const pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void }>();
 
 const PreferencesSchema = z.object({
@@ -235,8 +241,54 @@ ipcMain.handle('office:rename', (_event, value: unknown): OfficeNames => {
   return names;
 });
 ipcMain.handle('office:usage', () => fetchUsage());
+ipcMain.handle('office:version', () => app.getVersion());
 ipcMain.handle('office:check-app-update', () => checkAppUpdate(app.getVersion()));
-ipcMain.handle('office:open-app-update', async () => { try { await shell.openExternal(APP_UPDATE_URL); } catch {} });
+async function installAppUpdate() {
+  if (!app.isPackaged || process.platform !== 'win32' || process.arch !== 'x64') {
+    return { ok: false, message: 'La instalación automática solo está disponible en la aplicación instalada para Windows x64.' };
+  }
+  if (updateInstallInProgress || installingUpdate) return { ok: false, message: 'Ya hay una instalación de actualización en curso.' };
+  updateInstallInProgress = true;
+  let downloaded: DownloadedUpdate | null = null;
+  try {
+    const release = await latestAppUpdate(app.getVersion());
+    if (!release) return { ok: false, message: 'No hay una release más reciente para instalar.' };
+    downloaded = await downloadInstaller(release);
+    updateHelper = await startUpdateHelper(downloaded);
+    installingUpdate = true;
+    updateSignalSent = false;
+    const helperFailedWhileOpen = (code: number | null) => {
+      if (quitting || !installingUpdate) return;
+      if (updateExitTimer) clearTimeout(updateExitTimer);
+      updateExitTimer = null;
+      installingUpdate = false;
+      updateInstallInProgress = false;
+      updateHelper = null;
+      try { publishLauncher(process.pid); } catch {}
+      const message = consumeUpdateError() ?? `El helper de actualización se detuvo antes de cerrar la oficina (código ${code ?? 'desconocido'}). No se instaló nada; puedes volver a intentarlo.`;
+      void rm(downloaded!.directory, { recursive: true, force: true }).catch(() => {});
+      void (window
+        ? dialog.showMessageBox(window, { type: 'error', title: 'No se pudo iniciar la actualización', message })
+        : dialog.showMessageBox({ type: 'error', title: 'No se pudo iniciar la actualización', message }));
+    };
+    updateHelper.once('exit', helperFailedWhileOpen);
+    updateExitTimer = setTimeout(() => {
+      updateExitTimer = null;
+      if (updateHelper && (updateHelper.exitCode !== null || updateHelper.signalCode !== null)) helperFailedWhileOpen(updateHelper.exitCode);
+      else app.quit();
+    }, 300);
+    return { ok: true, message: 'La actualización se descargó y verificó. La oficina se cerrará para instalarla y se abrirá de nuevo.' };
+  } catch (error) {
+    try { publishLauncher(process.pid); } catch {}
+    if (downloaded) {
+      try { await rm(downloaded.directory, { recursive: true, force: true }); } catch {}
+    }
+    return { ok: false, message: error instanceof Error ? error.message : 'No se pudo preparar la actualización.' };
+  } finally {
+    if (!installingUpdate) updateInstallInProgress = false;
+  }
+}
+ipcMain.handle('office:install-app-update', () => installAppUpdate());
 ipcMain.handle('office:always-on-top', () => preferences().alwaysOnTop);
 ipcMain.on('office:set-always-on-top', (_event, value: unknown) => {
   const alwaysOnTop = value === true;
@@ -247,25 +299,102 @@ ipcMain.on('office:restore-bounds', () => { savePreferences({ position: null });
 ipcMain.on('office:minimize', () => window?.minimize());
 ipcMain.on('office:close', () => window?.close());
 
-// Tells the omp bridge how to start this office and whether it is already running.
-function publishLauncher(pid: number | null) {
+// The helper PID reserves the launcher while Windows replaces the installed files.
+function publishLauncher(pid: number | null, installing = false) {
   mkdirSync(dataDir, { recursive: true });
   const args = app.isPackaged ? [] : [root];
-  writeFileSync(join(dataDir, 'launcher.json'), JSON.stringify({ command: process.execPath, args, pid }));
+  writeFileSync(join(dataDir, 'launcher.json'), JSON.stringify({ command: process.execPath, args, pid, ...(installing ? { installing: true } : {}) }));
+}
+function updateInstallationActive(): boolean {
+  try {
+    const launcher: unknown = JSON.parse(readFileSync(join(dataDir, 'launcher.json'), 'utf8'));
+    if (typeof launcher !== 'object' || launcher === null || !('installing' in launcher) || launcher.installing !== true
+      || !('pid' in launcher) || typeof launcher.pid !== 'number' || !Number.isSafeInteger(launcher.pid) || launcher.pid < 1) return false;
+    try { process.kill(launcher.pid, 0); return true; } catch { return false; }
+  } catch { return false; }
+}
+function consumeUpdateError(): string | null {
+  const file = join(dataDir, 'app-update-error.json');
+  try {
+    const value: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    rmSync(file, { force: true });
+    return typeof value === 'object' && value !== null && 'message' in value && typeof value.message === 'string' ? value.message : null;
+  } catch {
+    try { rmSync(file, { force: true }); } catch {}
+    return null;
+  }
+}
+async function startUpdateHelper(downloaded: DownloadedUpdate): Promise<ChildProcessWithoutNullStreams> {
+  const executable = app.getPath('exe');
+  const helperSource = join(process.resourcesPath, 'app.asar.unpacked', 'dist', 'app-update-helper.js');
+  const bunSource = join(process.resourcesPath, 'bun', 'bun.exe');
+  if (!existsSync(helperSource) || !existsSync(bunSource)) throw new Error('No se encontró el helper instalado para actualizar la oficina.');
+  // NSIS replaces resources/bun/bun.exe too, so the detached helper must run from the temp staging directory.
+  const helper = join(downloaded.directory, 'app-update-helper.js');
+  const bun = join(downloaded.directory, 'app-update-helper.exe');
+  await copyFile(helperSource, helper);
+  await copyFile(bunSource, bun);
+  const child = spawn(bun, [helper, downloaded.installer, downloaded.digest, dirname(executable), executable, dataDir, String(process.pid)], {
+    detached: true, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let errors = '';
+    const lines = createInterface({ input: child.stdout });
+    const timeout = setTimeout(() => fail(new Error('El helper de instalación no respondió a tiempo.')), 15_000);
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      lines.close();
+      if (!child.pid || child.exitCode !== null || child.signalCode !== null) reject(error);
+      else {
+        child.kill();
+        child.once('close', () => reject(error));
+      }
+    };
+    lines.on('line', line => {
+      if (line !== 'READY' || settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      lines.close();
+      child.stdout.destroy();
+      child.stderr.destroy();
+      child.unref();
+      resolve(child);
+    });
+    child.stderr.on('data', chunk => { if (errors.length < 2048) errors += String(chunk).slice(0, 2048 - errors.length); });
+    child.once('error', error => fail(new Error(`No se pudo iniciar el helper de actualización: ${error.message}`)));
+    child.once('exit', code => {
+      if (!settled) fail(new Error(`El helper de actualización terminó antes de prepararse${errors ? `: ${errors}` : ` (código ${code}).`}`));
+    });
+  });
 }
 if (!app.requestSingleInstanceLock()) app.quit();
+else if (updateInstallationActive()) app.quit();
 else {
   app.setAppUserModelId('es.nter.oficina-omp');
   // Launches requested by an omp session must not restore a window the user minimized.
   app.on('second-instance', (_event, argv) => { if (!argv.includes('--from-omp') && window?.isMinimized()) window.restore(); });
   app.whenReady().then(() => {
+    const updateError = consumeUpdateError();
     publishLauncher(process.pid);
     startWorker();
     createWindow();
+    if (updateError) window?.once('ready-to-show', () => {
+      if (window) void dialog.showMessageBox(window, { type: 'error', title: 'No se pudo instalar la actualización', message: updateError });
+    });
     screen.on('display-metrics-changed', place);
     screen.on('display-removed', place);
   });
-  app.on('before-quit', () => { quitting = true; publishLauncher(null); worker?.stdin.end(); });
+  app.on('before-quit', () => {
+    quitting = true;
+    if (updateExitTimer) { clearTimeout(updateExitTimer); updateExitTimer = null; }
+    if (installingUpdate) {
+      if (!updateSignalSent) { updateSignalSent = true; updateHelper?.stdin.end('INSTALL\n'); }
+    } else publishLauncher(null);
+    worker?.stdin.end();
+  });
   // Closing the office only stops the office: omp sessions keep running untouched.
   app.on('window-all-closed', () => { quitting = true; worker?.stdin.end(); app.quit(); });
 }

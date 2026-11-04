@@ -60,7 +60,7 @@ El instalador que generes localmente tampoco estará firmado.
 - **Desplazamientos.** Los personajes y el mensajero mueven brazos y piernas al caminar, también con la reducción de movimiento de Windows; los demás efectos siguen respetando esa preferencia.
 - **Consumo.** La escena se dibuja a un máximo de 30 imágenes por segundo mientras hay movimiento o acciones; cuando queda quieta deja de repintarse continuamente y se actualiza al cambiar el estado o el tamaño. Las sesiones de omp siguen supervisándose.
 - **Actividad.** Los personajes muestran un libro al leer, una lupa al buscar, un lápiz al editar, una terminal al ejecutar comandos y una lista al coordinar tareas. Una acción breve puede seguir visible hasta 1,5 segundos para que no se pierda entre actualizaciones. Al quedar libres dejan de mostrarla; las consolas ya abiertas deben reiniciarse para cargar el puente actualizado.
-- **Avisos.** Un agente que espera tu decisión va hacia tu personaje («TÚ») con un «!». **Responder aquí** abre su ficha con la pregunta completa y sus opciones. Puedes responder allí o en la consola; las autorizaciones y revisiones de planes conservan el acceso a la consola original.
+- **Avisos.** Un agente que espera tu decisión va hacia tu personaje («TÚ») con un «!». **Responder aquí** abre su ficha con la pregunta completa y sus opciones; el texto entre `**` se muestra en negrita. Puedes responder allí o en la consola; las autorizaciones y revisiones de planes conservan el acceso a la consola original. Las cabeceras de las ventanas internas siguen visibles al desplazarse para poder cerrarlas.
 - **Consulta.** Un subagente que pregunta a su agente se acerca a él con un «?».
 - **Escala y sala de espera.** La sala de descanso y la zona de trabajo comparten una escala uniforme: cada personaje mantiene su tamaño al pasar entre ellas. El espacio reservado se adapta a la cantidad de agentes y mesas y, si hace falta, ambas zonas se reducen juntas para caber en la ventana.
 - **Mensajero.** Cuando pasas de cero consolas principales abiertas a al menos una, llega un mensajero. Al pulsarlo se abre el listado de conversaciones de los últimos 7 días. El botón **Historial** abre el mismo listado en cualquier momento.
@@ -68,7 +68,7 @@ El instalador que generes localmente tampoco estará firmado.
 - **Mesas seleccionables.** Al pulsar una mesa se abre la ficha del proyecto con su nombre, carpeta y agentes asignados; al pulsar uno se abre su ficha. **Nombre de la mesa → Guardar nombre** cambia su nombre visual.
 - **Jefe y usage.** Pulsar tu personaje —perro en Animales, humano en Robots— abre las cuotas y límites reales de omp, equivalentes a `/usage`, con identificadores de cuenta ocultos. **Actualizar usage** vuelve a consultarlos.
 - **Estrés.** Tu personaje muestra una señal progresiva de estrés según los agentes y subagentes trabajando; disminuye cuando baja la carga.
-- **Actualizaciones.** Al abrirse, la oficina consulta la versión pública del repositorio. Si es más reciente, muestra un aviso con un enlace al repositorio; la instalación es manual. Sin conexión no interrumpe el inicio.
+- **Actualizaciones.** La versión instalada aparece en la esquina inferior derecha. Al abrirse, la oficina consulta la última release estable publicada en GitHub. Si es más reciente, pulsa el aviso para descargar el instalador y actualizar: comprueba su tamaño y SHA-256, cierra la oficina, instala en la misma carpeta y la vuelve a abrir, sin cerrar tus sesiones de omp ni borrar preferencias o historial. Si falla antes de instalar, muestra el error y permite reintentar. Sin conexión no interrumpe el inicio.
 
 ## Personalización
 
@@ -174,7 +174,7 @@ $bun = '.\.superpowers\tools\bun-windows-x64\bun.exe'
 
 `bun run dist` genera `release\win-unpacked\Oficina nter.exe` y un instalador NSIS que incluye Electron y Bun. El equipo de destino no necesita Node ni Bun instalados. Los ejecutables no están firmados.
 
-Para publicar una nueva versión, incrementa `version` en `package.json` con tres números (`mayor.menor.parche`), comprueba y publica el código en `main`, genera el instalador con `bun run dist` y adjúntalo a una nueva versión en GitHub Releases. El aviso compara la versión de `main` con la instalada; no detecta commits que no cambien el número. Publica el instalador junto con el cambio de versión para que esté disponible cuando aparezca el aviso.
+Para publicar una nueva versión, incrementa `version` en `package.json` con tres números (`mayor.menor.parche`), comprueba y publica el código en `main`, genera el instalador y adjúntalo a una release estable en GitHub con la etiqueta `v<versión>`. Para la actualización automática el asset debe llamarse `Oficina.nter.Setup.<versión>.exe` y GitHub debe informar su SHA-256. La verificación de integridad no sustituye a una firma digital: el instalador sigue sin firmar.
 
 El icono de Windows es `assets\nter-logo.ico` (256, 128, 64, 48, 32 y 16 px), derivado de `assets\nter-logo.png`. Se incluye ya convertido porque el conversor de iconos de electron-builder se queda bloqueado al ejecutarse con Bun; si cambias el logo, regenera también el `.ico`.
 

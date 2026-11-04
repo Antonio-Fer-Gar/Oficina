@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+## 0.1.7
+
+### Added
+
+- Al pulsar el aviso de actualización se descarga la última release estable, se verifica el instalador y se actualiza y reabre la oficina sin cerrar las sesiones de omp.
+- La esquina inferior derecha muestra la versión instalada de la aplicación.
+- Las preguntas y opciones admiten negritas con `**texto**`; las cabeceras de las ventanas internas permanecen visibles al desplazarse.
+
 ## 0.1.6
 
 ### Added

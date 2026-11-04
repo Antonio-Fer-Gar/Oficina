@@ -9,6 +9,7 @@
 <body>
 <main class="dock">
   <canvas id="office" aria-label="Oficina de agentes"></canvas>
+  <span id="app-version" class="app-version" aria-label="Versión instalada"></span>
   <div class="toolbar">
     <span id="status" class="status">Conectando…</span>
     <button id="history-button" type="button">Historial</button>
@@ -18,13 +19,14 @@
     <button id="close" type="button" aria-label="Cerrar oficina">×</button>
   </div>
   <div id="notices" class="notices" aria-live="assertive"></div>
-  <section id="app-update-notice" class="app-update-notice" role="status" aria-label="Actualización disponible" hidden>
-    <div class="app-update-heading">
-      <strong>Hay una nueva versión disponible</strong>
-      <button id="app-update-close" type="button" aria-label="Cerrar aviso de actualización">×</button>
-    </div>
-    <p id="app-update-versions"></p>
-    <button id="app-update-open" class="primary" type="button">Ver repositorio</button>
+  <section id="app-update-notice" class="app-update-notice" role="region" aria-label="Actualización disponible" hidden>
+    <button id="app-update-install" class="app-update-action" type="button">
+      <strong class="app-update-title">Hay una nueva versión disponible</strong>
+      <span id="app-update-versions" class="app-update-versions"></span>
+      <span id="app-update-state" class="app-update-state" role="status" aria-live="polite"></span>
+      <span class="app-update-cta"><span id="app-update-action-label">Actualizar ahora</span></span>
+    </button>
+    <button id="app-update-close" class="app-update-close" type="button" aria-label="Cerrar aviso de actualización">×</button>
   </section>
   <section id="card" class="panel card" hidden>
     <header><strong id="card-name"></strong><button id="card-close" type="button" aria-label="Cerrar ficha">×</button></header>

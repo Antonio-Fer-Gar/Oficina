@@ -24,8 +24,9 @@ export interface OfficeApi {
   names(): Promise<OfficeNames>;
   rename(request: Rename): Promise<OfficeNames>;
   usage(): Promise<UsageResult>;
+  version(): Promise<string>;
   checkAppUpdate(): Promise<{ version: string; currentVersion: string } | null>;
-  openAppUpdate(): Promise<void>;
+  installAppUpdate(): Promise<{ ok: boolean; message: string }>;
   send(command: OfficeCommand): Promise<CommandResult>;
   focusSession(ref: AgentRef): Promise<FocusResult>;
   history(): Promise<ConversationRecord[]>;
@@ -59,8 +60,9 @@ const api: OfficeApi = {
   names: () => ipcRenderer.invoke('office:names'),
   rename: request => ipcRenderer.invoke('office:rename', request),
   usage: () => ipcRenderer.invoke('office:usage'),
+  version: () => ipcRenderer.invoke('office:version'),
   checkAppUpdate: () => ipcRenderer.invoke('office:check-app-update'),
-  openAppUpdate: () => ipcRenderer.invoke('office:open-app-update'),
+  installAppUpdate: () => ipcRenderer.invoke('office:install-app-update'),
   send: command => ipcRenderer.invoke('office:send', command),
   focusSession: ref => ipcRenderer.invoke('office:focus', ref),
   history: () => ipcRenderer.invoke('office:history'),

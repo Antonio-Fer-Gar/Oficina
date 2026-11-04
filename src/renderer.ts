@@ -146,27 +146,39 @@ function pendingQuestion(info: AgentInfo | undefined): PendingQuestion | null {
   return info?.question?.questions.length ? info.question : null;
 }
 const answerKey = (actorId: string, requestId: string) => `${actorId}\0${requestId}`;
+function appendEmphasis(element: HTMLElement, text: string) {
+  const pattern = /\*\*(\S(?:[^\n]*?\S)?)\*\*/g;
+  let offset = 0;
+  for (const match of text.matchAll(pattern)) {
+    element.append(document.createTextNode(text.slice(offset, match.index)));
+    const strong = document.createElement('strong');
+    strong.textContent = match[1]!;
+    element.append(strong);
+    offset = match.index! + match[0].length;
+  }
+  element.append(document.createTextNode(text.slice(offset)));
+}
 function questionGroup(question: PendingQuestion['questions'][number], index: number, includeCustom: boolean): HTMLFieldSetElement {
   const field = document.createElement('fieldset');
   field.className = 'question-group'; field.dataset.questionId = question.id;
   const legend = document.createElement('legend');
-  legend.textContent = question.header || `Pregunta ${index + 1}`;
+  appendEmphasis(legend, question.header || `Pregunta ${index + 1}`);
   field.append(legend);
   const prompt = document.createElement('p');
-  prompt.className = 'question-prompt'; prompt.textContent = question.question; field.append(prompt);
+  prompt.className = 'question-prompt'; appendEmphasis(prompt, question.question); field.append(prompt);
   question.options.forEach((option, optionIndex) => {
     const label = document.createElement('label'), input = document.createElement('input'), copy = document.createElement('span');
     label.className = 'question-option';
     input.type = question.multi ? 'checkbox' : 'radio'; input.name = `question-${index}`; input.value = option.label;
     copy.className = 'question-option-copy';
-    const title = document.createElement('span'); title.className = 'question-option-title'; title.textContent = option.label;
+    const title = document.createElement('span'); title.className = 'question-option-title'; appendEmphasis(title, option.label);
     copy.append(title);
     if (question.recommended === optionIndex) {
       const badge = document.createElement('span'); badge.className = 'question-recommended'; badge.textContent = 'Recomendada'; title.append(badge);
     }
     if (option.description) {
       const description = document.createElement('span'); description.className = 'question-description';
-      description.textContent = option.description; copy.append(description);
+      appendEmphasis(description, option.description); copy.append(description);
     }
     if (option.preview) {
       const preview = document.createElement('pre'); preview.className = 'question-preview';
@@ -542,6 +554,7 @@ office.onVisibility(visible => scene.setVisible(visible));
 office.subscribe(apply);
 office.onBriefing(id => { if (!briefings.includes(id)) briefings.push(id); scene.offerBriefing(); renderNotices(); });
 void office.muted().then(value => { muted = value; $('mute').setAttribute('aria-pressed', String(muted)); $('mute').textContent = muted ? 'Silencio' : 'Sonido'; });
+void office.version().then(version => { $('app-version').textContent = 'v' + version; });
 function showAppUpdate(update: unknown) {
   if (!update || typeof update !== 'object') return;
   const { version, currentVersion } = update as { version?: unknown; currentVersion?: unknown };
@@ -549,8 +562,38 @@ function showAppUpdate(update: unknown) {
   $('app-update-versions').textContent = `Versión instalada: ${currentVersion} · Nueva versión: ${version}`;
   $('app-update-notice').hidden = false;
 }
-$('app-update-close').onclick = () => { $('app-update-notice').hidden = true; };
-$('app-update-open').onclick = () => { void office.openAppUpdate().catch(() => undefined); };
+function setAppUpdateState(message: string, error = false) {
+  const state = $('app-update-state');
+  state.setAttribute('role', error ? 'alert' : 'status');
+  state.setAttribute('aria-live', error ? 'assertive' : 'polite');
+  state.textContent = message;
+}
+async function installAppUpdate() {
+  const button = $('app-update-install');
+  if (button.getAttribute('aria-disabled') === 'true') return;
+  button.setAttribute('aria-disabled', 'true');
+  $('app-update-action-label').textContent = 'Descargando e instalando…';
+  setAppUpdateState('Descargando e instalando la actualización…');
+  try {
+    const result = await office.installAppUpdate();
+    if (result.ok) {
+      setAppUpdateState(result.message.trim() || 'La actualización se inició correctamente.');
+      $('app-update-action-label').textContent = 'Actualización iniciada';
+      return;
+    }
+    setAppUpdateState(result.message.trim() || 'No se pudo instalar la actualización. Inténtalo de nuevo.', true);
+  } catch (error) {
+    const message = error instanceof Error ? error.message.trim() : '';
+    setAppUpdateState(message || 'No se pudo instalar la actualización. Inténtalo de nuevo.', true);
+  }
+  $('app-update-action-label').textContent = 'Reintentar actualización';
+  button.removeAttribute('aria-disabled');
+}
+$('app-update-notice').onclick = () => { void installAppUpdate(); };
+$('app-update-close').onclick = event => {
+  event.stopPropagation();
+  $('app-update-notice').hidden = true;
+};
 void office.checkAppUpdate().then(showAppUpdate).catch(() => undefined);
 void office.snapshot().then(apply);
 // Connecting omp is an explicit user action: the office never changes omp on its own.

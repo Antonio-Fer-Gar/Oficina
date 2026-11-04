@@ -28,13 +28,14 @@ function tokenSavingSystemPrompt(systemPrompt: readonly string[]): string[] | un
 const records = new Map<string, Binding>();
 let host: BridgeHost | undefined;
 let launchChecked = false;
-const LauncherSchema = z.object({ command: z.string().min(1), args: z.array(z.string()), pid: z.number().int().positive().nullable() });
+const LauncherSchema = z.object({ command: z.string().min(1), args: z.array(z.string()), pid: z.number().int().positive().nullable(), installing: z.boolean().optional() });
 /** Starts the office once per omp process if the user has it installed but closed; the app itself stays single-instance. */
 function launchOffice() {
   if (launchChecked) return;
   launchChecked = true;
   let launcher: z.infer<typeof LauncherSchema>;
   try { launcher = LauncherSchema.parse(JSON.parse(readFileSync(join(dataDir, 'launcher.json'), 'utf8'))); } catch { return; }
+  if (launcher.installing) return;
   if (launcher.pid) {
     try { process.kill(launcher.pid, 0); return; } catch { /* not running: launch below */ }
   }

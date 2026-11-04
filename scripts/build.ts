@@ -8,6 +8,7 @@ const bundles: Parameters<typeof Bun.build>[0][] = [
   { entrypoints: ['src/renderer.ts'], target: 'browser', format: 'iife', naming: 'renderer.js' },
   { entrypoints: ['src/bridge/worker.ts'], target: 'bun', format: 'esm', naming: 'worker.js' },
   { entrypoints: ['src/terminal-launcher.ts'], target: 'bun', format: 'esm', naming: 'terminal-launcher.js' },
+  { entrypoints: ['src/app-update-helper.ts'], target: 'bun', format: 'esm', naming: 'app-update-helper.js' },
   { entrypoints: ['src/bridge/extension.ts'], target: 'bun', format: 'esm', naming: 'extension.js', external: ['@oh-my-pi/pi-coding-agent'] },
 ];
 for (const options of bundles) {
