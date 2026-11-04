@@ -70,6 +70,103 @@ describe('office shared project chairs', () => {
     expect(state.actors.get(agentKey(second.ref))!.stage).toBe('coffee');
     expect(project.seat).toBeNull();
   });
+  test('the final console returns its installed desk and then removes its courier', () => {
+    const root = agent('Main'), state = createOffice();
+    syncOffice(state, [root]); walk(state, 12);
+    const project = [...state.projects.values()][0]!;
+    const id = agentKey(root.ref);
+    syncOffice(state, []);
+    expect(project.installed).toBe(true);
+    expect(project.carrier).toBe(id);
+    expect(state.actors.get(id)?.stage).toBe('return-fetch');
+    walk(state);
+    expect(state.actors.has(id)).toBe(false);
+    expect(state.projects.has(project.id)).toBe(false);
+  });
+  test('a remaining console keeps the shared desk instead of returning it', () => {
+    const first = agent('First'), second = agent('Second'), state = createOffice();
+    syncOffice(state, [first, second]); walk(state, 12);
+    const project = [...state.projects.values()][0]!;
+    syncOffice(state, [second]);
+    expect(state.actors.has(agentKey(first.ref))).toBe(false);
+    expect(project.installed).toBe(true);
+    expect(project.carrier).toBeNull();
+    expect(state.actors.get(agentKey(second.ref))?.stage).not.toBe('return-fetch');
+  });
+  test('closing during incoming desk transport sends the carried desk back', () => {
+    const root = agent('Main'), state = createOffice();
+    syncOffice(state, [root]);
+    const id = agentKey(root.ref), project = [...state.projects.values()][0]!;
+    advanceOffice(state, 0.9);
+    expect(state.actors.get(id)?.stage).toBe('drag');
+    syncOffice(state, []);
+    expect(state.actors.get(id)?.stage).toBe('return');
+    walk(state);
+    expect(state.actors.has(id)).toBe(false);
+    expect(state.projects.has(project.id)).toBe(false);
+  });
+  test('reopening a project during desk return reverses the courier and keeps the desk', () => {
+    const root = agent('Main'), state = createOffice();
+    syncOffice(state, [root]); walk(state, 12);
+    const project = [...state.projects.values()][0]!;
+    const id = agentKey(root.ref), reopened = agent('Reopened');
+    syncOffice(state, []);
+    expect(state.actors.get(id)?.stage).toBe('return-fetch');
+    advanceOffice(state, 1);
+    expect(state.actors.get(id)?.stage).toBe('return');
+    expect(project.installed).toBe(false);
+    syncOffice(state, [reopened]);
+    expect(project.carrier).toBe(id);
+    expect(state.actors.get(id)?.stage).toBe('drag');
+    walk(state);
+    expect(state.actors.has(id)).toBe(false);
+    expect(project.installed).toBe(true);
+    expect(state.projects.has(project.id)).toBe(true);
+  });
+  test('reopening before pickup keeps the installed desk and drops its courier', () => {
+    const root = agent('Main'), state = createOffice();
+    syncOffice(state, [root]); walk(state, 12);
+    const project = [...state.projects.values()][0]!, id = agentKey(root.ref), reopened = agent('Reopened');
+    syncOffice(state, []);
+    expect(state.actors.get(id)?.stage).toBe('return-fetch');
+    syncOffice(state, [reopened]);
+    expect(project.installed).toBe(true);
+    expect(project.carrier).toBeNull();
+    expect(state.actors.has(id)).toBe(false);
+    expect(project.members).toEqual([agentKey(reopened.ref)]);
+  });
+  test('simultaneous console closures use one courier for the shared desk', () => {
+    const first = agent('First'), second = agent('Second'), state = createOffice();
+    syncOffice(state, [first, second]); walk(state, 12);
+    const project = [...state.projects.values()][0]!;
+    syncOffice(state, []);
+    expect([...state.actors.values()].filter(actor => actor.departing)).toHaveLength(1);
+    walk(state);
+    expect(state.actors.size).toBe(0);
+    expect(state.projects.has(project.id)).toBe(false);
+  });
+  test('an orphaned subagent keeps the desk until it is the final project member', () => {
+    const root = agent('Main'), child = agent('orphan', root), state = createOffice();
+    syncOffice(state, [root, child]); walk(state, 12);
+    const project = [...state.projects.values()][0]!;
+    syncOffice(state, [child]);
+    expect(project.installed).toBe(true);
+    syncOffice(state, []);
+    expect(state.actors.get(agentKey(child.ref))?.stage).toBe('return-fetch');
+    walk(state);
+    expect(state.projects.has(project.id)).toBe(false);
+  });
+  test('incomplete inventory does not close a console or start desk return', () => {
+    const root = agent('Main'), state = createOffice();
+    syncOffice(state, [root]); walk(state, 12);
+    const project = [...state.projects.values()][0]!, id = agentKey(root.ref);
+    syncOffice(state, [], false);
+    expect(state.actors.get(id)?.departing).toBe(false);
+    expect(project.installed).toBe(true);
+    expect(project.members).toEqual([id]);
+    syncOffice(state, []);
+    expect(state.actors.get(id)?.stage).toBe('return-fetch');
+  });
   test('cats take the first free name, mice do not consume names, and a freed name is reused', () => {
     const state = createOffice();
     const a = agent('A'), mouse = agent('mouse', a), b = agent('B'), c = agent('C');

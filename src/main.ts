@@ -33,12 +33,13 @@ const PreferencesSchema = z.object({
   appearance: AppearanceSchema.nullable().catch(null),
   position: z.object({ x: z.number(), y: z.number(), width: z.number().optional(), height: z.number().optional() }).nullable().catch(null),
   alwaysOnTop: z.boolean().catch(false),
+  tokenSaving: z.boolean().catch(true),
   names: OfficeNamesSchema.catch({ cats: {}, projects: {} }),
 });
 type Preferences = z.infer<typeof PreferencesSchema>;
 function preferences(): Preferences {
   try { return PreferencesSchema.parse(JSON.parse(readFileSync(preferencesFile, 'utf8'))); }
-  catch { return { muted: false, appearance: null, position: null, alwaysOnTop: false, names: { cats: {}, projects: {} } }; }
+  catch { return { muted: false, appearance: null, position: null, alwaysOnTop: false, tokenSaving: true, names: { cats: {}, projects: {} } }; }
 }
 function savePreferences(change: Partial<Preferences>) {
   mkdirSync(dataDir, { recursive: true });
@@ -216,6 +217,10 @@ ipcMain.handle('office:bridge-install', () => {
 ipcMain.on('office:set-muted', (_event, muted: unknown) => savePreferences({ muted: muted === true }));
 ipcMain.handle('office:appearance', () => preferences().appearance);
 ipcMain.handle('office:set-appearance', (_event, value: unknown) => { savePreferences({ appearance: AppearanceSchema.parse(value) }); });
+ipcMain.handle('office:token-saving', () => preferences().tokenSaving);
+ipcMain.handle('office:set-token-saving', (_event, enabled: unknown) => {
+  savePreferences({ tokenSaving: z.boolean().parse(enabled) });
+});
 ipcMain.handle('office:names', () => preferences().names);
 ipcMain.handle('office:rename', (_event, value: unknown): OfficeNames => {
   const request = RenameSchema.parse(value);

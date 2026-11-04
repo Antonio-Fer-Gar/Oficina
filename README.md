@@ -52,9 +52,9 @@ El instalador que generes localmente tampoco estará firmado.
 
 ## Qué se ve
 
-- **Proyectos.** Cada carpeta tiene una mesa. El primer agente de un proyecto nuevo recoge una mesa de la zona de descanso y la coloca; las demás sesiones del proyecto la comparten. Las rutas de Windows que solo difieren en mayúsculas o en la barra final cuentan como la misma carpeta.
+- **Proyectos.** Cada carpeta tiene una mesa. El primer agente de un proyecto nuevo recoge una mesa de la zona de descanso y la coloca; las demás sesiones del proyecto la comparten. Al cerrar la última consola de un proyecto, su personaje devuelve la mesa a la zona de descanso y ambos desaparecen; si se reabre durante la devolución, la misma mesa vuelve al proyecto. Las rutas de Windows que solo difieren en mayúsculas o en la barra final cuentan como la misma carpeta.
 - **Personajes.** En Animales, un gato es un agente y un ratón es un subagente. Robots es la temática predeterminada: los agentes son robots azules inspirados en Microduck y los subagentes, más pequeños, son naranjas. Los nombres aparecen debajo; los de agentes principales se reutilizan cuando quedan libres.
-- **Consolas abiertas antes.** Las consolas de omp abiertas antes de conectar la oficina aparecen en el estado «Sin conectar». La oficina lee su carpeta y, en Windows Terminal, su conversación, en solo lectura. No muestra su actividad ni permite controlarlas hasta reiniciarlas.
+- **Consolas abiertas antes.** Las consolas de omp abiertas antes de conectar la oficina aparecen en el estado «Sin conectar». La oficina lee su carpeta y, en Windows Terminal, su conversación, en solo lectura. No muestra su actividad ni permite controlarlas hasta reiniciarlas. El servicio interno `browser-relay` no cuenta como consola ni crea una mesa.
 - **Una silla por proyecto.** Se sienta quien está trabajando. Al llegar, el personaje se ve sentado de espaldas, mirando al ordenador, con los brazos hacia el teclado y el respaldo delante del cuerpo. Al levantarse vuelve a la vista frontal. Los demás hacen cola por orden de llegada. Si el agente sentado queda libre, pasa a necesitar una decisión o termina, le cede la silla al primero de la cola. Una tarea en segundo plano o un subagente en marcha mantienen ocupada la silla.
 - **Descanso.** Los agentes libres van a la zona de café. Los dos primeros en llegar ocupan el sofá; cuando queda una plaza libre pasa al siguiente que espera.
 - **Desplazamientos.** Los personajes y el mensajero mueven brazos y piernas al caminar, también con la reducción de movimiento de Windows; los demás efectos siguen respetando esa preferencia.
@@ -64,7 +64,7 @@ El instalador que generes localmente tampoco estará firmado.
 - **Consulta.** Un subagente que pregunta a su agente se acerca a él con un «?».
 - **Escala y sala de espera.** La sala de descanso y la zona de trabajo comparten una escala uniforme: cada personaje mantiene su tamaño al pasar entre ellas. El espacio reservado se adapta a la cantidad de agentes y mesas y, si hace falta, ambas zonas se reducen juntas para caber en la ventana.
 - **Mensajero.** Cuando pasas de cero consolas principales abiertas a al menos una, llega un mensajero. Al pulsarlo se abre el listado de conversaciones de los últimos 7 días. El botón **Historial** abre el mismo listado en cualquier momento.
-- **Modelo sobre la cabeza.** Cada agente y subagente muestra únicamente la imagen flotante del modelo efectivo, sin rombo, marco ni fondo: Opus es un pulpo, Sol un sol, Luna una luna y Terra un planeta Tierra. Otros modelos muestran un nombre abreviado; `N/D` indica que no hay modelo conocido. La imagen cambia cuando el puente confirma el modelo activo y no tapa los avisos de decisión o consulta.
+- **Modelo sobre la cabeza.** Cada agente y subagente muestra el distintivo flotante del modelo efectivo, sin rombo, marco ni fondo: Opus es un pulpo, Sol un sol, Luna una luna y Terra un planeta Tierra. Grok muestra su símbolo y, si está disponible, su número de versión. Se reconoce el modelo por su identidad también cuando se usa GitHub Copilot; otros modelos muestran un nombre abreviado y `N/D` indica que no hay modelo conocido. La imagen cambia cuando el puente confirma el modelo activo y no tapa los avisos de decisión o consulta.
 - **Mesas seleccionables.** Al pulsar una mesa se abre la ficha del proyecto con su nombre, carpeta y agentes asignados; al pulsar uno se abre su ficha. **Nombre de la mesa → Guardar nombre** cambia su nombre visual.
 - **Jefe y usage.** Pulsar tu personaje —perro en Animales, humano en Robots— abre las cuotas y límites reales de omp, equivalentes a `/usage`, con identificadores de cuenta ocultos. **Actualizar usage** vuelve a consultarlos.
 - **Estrés.** Tu personaje muestra una señal progresiva de estrés según los agentes y subagentes trabajando; disminuye cuando baja la carga.
@@ -80,6 +80,21 @@ Al iniciar, elige **Animales** o **Robots**, seleccionado por defecto. Puedes ca
 - **Jefe humano:** hombre o mujer, tono de piel, color y estilo de pelo; aparece sentado de espaldas y la vista previa muestra el resultado antes de guardarlo.
 
 Mientras eliges, la oficina muestra el resultado. **Guardar** conserva las opciones, **×** descarta los cambios y **Restablecer aspecto animal** recupera la raza y ropa originales sin modificar las opciones de Robots.
+
+## Ahorro de tokens
+
+En **Ajustes → Ahorro de tokens** puedes activar o desactivar instrucciones conservadoras para omp. Está activado por defecto, también al actualizar una instalación anterior; el cambio se guarda inmediatamente y no depende del botón de apariencia **Guardar**.
+
+El puente añade una guía breve desde `assets/token-saving.md`: leer solo el contexto pertinente, evitar búsquedas repetidas, responder de forma concisa y delegar solo trabajo independiente cuando resulte útil. No sustituye ni modifica tus `AGENTS.md`, configuración o instrucciones existentes, y no cambia los modelos ni su grado de razonamiento. Son indicaciones, no una garantía de ahorro.
+
+Para usarlo, instala o actualiza el puente con el aviso de la oficina. Las consolas que ya estaban abiertas deben reiniciarse una vez para cargar el puente nuevo; después, cambiar la casilla afecta al siguiente mensaje. Se aplica a los perfiles donde hayas instalado el puente.
+
+### Comparar el consumo
+
+1. Prepara varias tareas representativas y dos copias idénticas del proyecto de prueba. No uses datos sensibles ni tareas destructivas.
+2. Ejecuta cada tarea con el mismo modelo, razonamiento, herramientas y condiciones: una vez con el modo activado y otra con él desactivado. Alterna cuál ejecutas primero y usa sesiones nuevas para reducir sesgos.
+3. Al terminar cada ejecución, anota las estadísticas disponibles en `/session` y los datos de cada subagente en el **Agent Hub** de omp: entrada, salida y caché si el proveedor los informa, número de subagentes, errores y repeticiones. Evita sumar dos veces el gasto de subagentes si el total de sesión ya lo incluye.
+4. Compara varias ejecuciones y verifica que el resultado y las pruebas sean equivalentes. Trata los campos estimados o no disponibles como tales; la cuota de `/usage` es compartida y no atribuye por sí sola el consumo a una tarea.
 
 ## Ficha de un agente
 

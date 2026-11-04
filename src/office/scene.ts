@@ -97,7 +97,7 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
     if (state) {
       for (const project of state.projects.values()) {
         if (project.installed) { painter.desk(project.x, 68); painter.chair(project.x, 94); }
-        painter.text(projectName(project, names).toUpperCase().slice(0, 22), project.x - 45, 37);
+        if (project.members.length) painter.text(projectName(project, names).toUpperCase().slice(0, 22), project.x - 45, 37);
       }
     }
     context.restore();
@@ -107,7 +107,8 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
         const bob = actor.moving && !reduced.matches ? Math.round(Math.sin(state.time * 11)) : 0;
         const position = toScreen(l, actor);
         context.save(); context.translate(position.x / l.unit, position.y / l.unit); context.scale(l.scale, l.scale);
-        if (actor.stage === 'drag') painter.desk(-28, -20);
+        const dragging = actor.stage === 'drag' || actor.stage === 'return';
+        if (dragging) painter.desk(-28, -20);
         const pose: Pose = actor.stage === 'seated' && !actor.moving ? 'sit'
           : actor.stage === 'coffee' && !actor.moving ? actor.sofaSlot !== null ? 'sofa' : 'coffee' : 'stand';
         const root = !actor.info.parent;
@@ -121,7 +122,7 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
           ? { kind: 'robot', role: root ? 'agent' : 'subagent', color: root ? appearance.robotColors?.agent : appearance.robotColors?.subagent }
           : root ? { kind: 'cat', coat: COATS[actor.order % COATS.length]! } : { kind: 'mouse' },
           root ? appearance.outfits.cat : appearance.outfits.mouse, pose,
-          { walking: actor.moving, frame: limbFrame, activity, dragging: actor.stage === 'drag' });
+          { walking: actor.moving, frame: limbFrame, activity, dragging });
         if (activity !== 'none') painter.activityProp(0, bob, activity, pose === 'sit', state.time, reduced.matches);
         context.restore();
         painter.modelBadge(0, root ? -42 + bob : -26 + bob * characterScale, actor.info.model);
@@ -159,7 +160,7 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
       Math.abs(roomWidth - state.roomWidth) > 0.1);
     let moving = false, animating = false;
     if (state) for (const actor of state.actors.values()) {
-      moving ||= actor.moving || actor.stage === 'fetch' || actor.stage === 'drag' || actor.stage === 'approach' ||
+      moving ||= actor.moving || actor.stage === 'fetch' || actor.stage === 'drag' || actor.stage === 'return-fetch' || actor.stage === 'return' || actor.stage === 'approach' ||
         (state.projects.get(actor.project)?.seat === actor.id && actor.stage !== 'seated');
       animating ||= !reduced.matches && !actor.moving && (actor.stage === 'seated' || actor.stage === 'waiting') &&
         resolveActivity(actor.info) !== 'none';
@@ -169,7 +170,8 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
   const click = (event: MouseEvent) => {
     if (!state) return;
     const box = canvas.getBoundingClientRect();
-    const hit = hitTest(layout(), { x: event.clientX - box.left, y: event.clientY - box.top }, state.actors.values(), messenger?.arrived ? messenger : null, state.projects.values());
+    const hit = hitTest(layout(), { x: event.clientX - box.left, y: event.clientY - box.top },
+      [...state.actors.values()].filter(actor => !actor.departing), messenger?.arrived ? messenger : null, state.projects.values());
     if (hit === 'briefing') handlers.onBriefing();
     else if (hit === 'boss') handlers.onBoss();
     else if (typeof hit === 'string') handlers.onSelect(state.actors.get(hit)!);
@@ -182,7 +184,7 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
   logo.addEventListener('load', wake);
   wake();
   return {
-    update(next) { state = next; stress = workloadStress(Array.from(next.actors.values(), actor => actor.info)); wake(); },
+    update(next) { state = next; stress = workloadStress([...next.actors.values()].filter(actor => !actor.departing).map(actor => actor.info)); wake(); },
     offerBriefing() { if (!messenger) messenger = { x: -20, y: 124, arrived: false }; wake(); },
     dismissBriefing() { messenger = null; wake(); },
     setAppearance(next) { appearance = next; wake(); },

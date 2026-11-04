@@ -16,6 +16,8 @@ export interface OfficeApi {
   installBridge(): Promise<{ ok: boolean; message: string }>;
   appearance(): Promise<Appearance | null>;
   setAppearance(appearance: Appearance): Promise<void>;
+  tokenSaving(): Promise<boolean>;
+  setTokenSaving(enabled: boolean): Promise<void>;
   restoreBounds(): void;
   alwaysOnTop(): Promise<boolean>;
   setAlwaysOnTop(alwaysOnTop: boolean): void;
@@ -49,6 +51,8 @@ const api: OfficeApi = {
   installBridge: () => ipcRenderer.invoke('office:bridge-install'),
   appearance: () => ipcRenderer.invoke('office:appearance'),
   setAppearance: appearance => ipcRenderer.invoke('office:set-appearance', appearance),
+  tokenSaving: () => ipcRenderer.invoke('office:token-saving'),
+  setTokenSaving: enabled => ipcRenderer.invoke('office:set-token-saving', enabled),
   restoreBounds: () => ipcRenderer.send('office:restore-bounds'),
   alwaysOnTop: () => ipcRenderer.invoke('office:always-on-top'),
   setAlwaysOnTop: alwaysOnTop => ipcRenderer.send('office:set-always-on-top', alwaysOnTop),

@@ -66,7 +66,7 @@ function acknowledgeBriefings() {
 function apply(update: OfficeUpdate) {
   agents = update.agents;
   inventoryComplete = update.complete;
-  syncOffice(state, agents);
+  syncOffice(state, agents, update.complete);
   scene.update(state);
   renderWorkload();
   if (selectedProject) {
@@ -84,7 +84,7 @@ function apply(update: OfficeUpdate) {
   renderNotices();
   if (selected) {
     const actor = state.actors.get(selected);
-    if (actor) fillCard(actor); else {
+    if (actor && !actor.departing) fillCard(actor); else {
       $('card-result').textContent = 'Este agente ha terminado su sesión.';
       $('card-result').classList.remove('error');
       $('card-questions').replaceChildren(); $('card-questions').hidden = true;
@@ -716,6 +716,34 @@ let alwaysOnTopTouched = false;
 alwaysOnTopToggle.onchange = () => { alwaysOnTopTouched = true; office.setAlwaysOnTop(alwaysOnTopToggle.checked); };
 $('restore-bounds').onclick = () => office.restoreBounds();
 void office.alwaysOnTop().then(value => { if (!alwaysOnTopTouched) alwaysOnTopToggle.checked = value; });
+const tokenSavingToggle = $<HTMLInputElement>('token-saving');
+const tokenSavingStatus = $('token-saving-status');
+let tokenSavingValue = true, tokenSavingReady = false;
+tokenSavingToggle.onchange = async () => {
+  if (!tokenSavingReady) return;
+  const next = tokenSavingToggle.checked;
+  tokenSavingToggle.disabled = true;
+  tokenSavingStatus.classList.remove('error');
+  tokenSavingStatus.textContent = 'Guardando…';
+  try {
+    await office.setTokenSaving(next);
+    tokenSavingValue = next;
+    tokenSavingStatus.textContent = 'Preferencia guardada.';
+  } catch (error) {
+    tokenSavingToggle.checked = tokenSavingValue;
+    tokenSavingStatus.classList.add('error');
+    tokenSavingStatus.textContent = 'No se pudo guardar la preferencia: ' + String(error);
+  } finally { tokenSavingToggle.disabled = false; }
+};
+void office.tokenSaving().then(value => {
+  tokenSavingValue = value;
+  tokenSavingToggle.checked = value;
+  tokenSavingReady = true;
+  tokenSavingToggle.disabled = false;
+}).catch(error => {
+  tokenSavingStatus.classList.add('error');
+  tokenSavingStatus.textContent = 'No se pudo cargar la preferencia: ' + String(error);
+});
 void office.appearance().then(saved => {
   appearance = saved ? {
     ...saved,

@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@oh-my-pi/pi-coding-agent';
+import tokenSavingPolicy from '../../assets/token-saving.md' with { type: 'text' };
 import { randomUUID, createHash } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -13,6 +14,17 @@ import { ThinkingSchema, type AgentInfo, type Answer, type CommandResult, type M
 
 const instanceId = randomUUID(), generation = randomUUID(), startedAt = new Date(Date.now() - process.uptime() * 1000).toISOString();
 const dataDir = process.env.NTER_OFFICE_DATA ?? join(process.env.LOCALAPPDATA ?? homedir(), 'nter-omp-office');
+
+function tokenSavingSystemPrompt(systemPrompt: readonly string[]): string[] | undefined {
+  let enabled = true;
+  try {
+    const preferences = JSON.parse(readFileSync(join(dataDir, 'preferences.json'), 'utf8')) as { tokenSaving?: unknown };
+    enabled = preferences.tokenSaving !== false;
+  } catch { /* Missing or invalid preferences retain the default. */ }
+  if (!enabled) return systemPrompt.includes(tokenSavingPolicy) ? systemPrompt.filter(block => block !== tokenSavingPolicy) : undefined;
+  if (systemPrompt.includes(tokenSavingPolicy)) return;
+  return [...systemPrompt, tokenSavingPolicy];
+}
 const records = new Map<string, Binding>();
 let host: BridgeHost | undefined;
 let launchChecked = false;
@@ -245,6 +257,10 @@ export default function officeExtension(pi: ExtensionAPI) {
     pi.registerTool(wrapper);
     nativeAskWrapped = true;
   };
+  pi.on('before_agent_start', event => {
+    const systemPrompt = tokenSavingSystemPrompt(event.systemPrompt);
+    return systemPrompt ? { systemPrompt } : undefined;
+  });
   pi.on('session_start', async (_event, ctx) => {
     await update(ctx);
     wrapNativeAsk(ctx);

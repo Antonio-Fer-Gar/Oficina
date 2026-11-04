@@ -43,8 +43,9 @@ public static class NterPeb {
 $rows = @()
 foreach ($p in Get-CimInstance Win32_Process -Filter "Name='omp.exe'") {
   $line = [string]$p.CommandLine
-  # Workers, daemons, RPC and print runs have no console of their own.
-  if ($line -match '__omp_|--mode|\s-p(\s|$)|--print') { continue }
+  # Workers, daemons, RPC, the browser relay and print runs have no office session.
+  if ($line -match '__omp_|--mode|\s-p(\s|$)|--print' -or
+      $line -match '^\s*(?:"[^"]+"|\S+)\s+browser-relay(\s|$)') { continue }
   $data = [NterPeb]::Inspect([int]$p.ProcessId)
   if (-not $data) { continue }
   $rows += @{ pid = [int]$p.ProcessId; started = $p.CreationDate.ToUniversalTime().ToString('o'); cwd = $data[0]; wtSession = $data[1]; profile = $data[2] }

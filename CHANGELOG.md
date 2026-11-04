@@ -2,6 +2,20 @@
 
 ## Sin publicar
 
+## 0.1.6
+
+### Added
+
+- Los distintivos identifican los modelos por su identidad también con GitHub Copilot; Grok muestra su símbolo y el número de versión disponible.
+- Ajuste de ahorro de tokens con guía breve para omp, delegación selectiva y comparación documentada; conserva las instrucciones y perfiles existentes y no garantiza ahorro.
+
+### Fixed
+
+- Al cerrar la última consola de un proyecto, el personaje devuelve su mesa y ambos desaparecen; la reapertura reutiliza la misma mesa.
+- El servicio interno `omp browser-relay` ya no aparece como consola ni crea mesas fantasma.
+
+## Cambios anteriores
+
 ### Added
 
 - Laura y Nono se añaden a los nombres automáticos de agentes; Diego ya estaba disponible.

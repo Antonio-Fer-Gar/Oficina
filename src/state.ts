@@ -5,13 +5,13 @@ export interface Project {
 }
 export interface Actor {
   id: string; info: AgentInfo; project: string; x: number; y: number;
-  stage: 'fetch' | 'drag' | 'approach' | 'waiting' | 'seated' | 'coffee' | 'attention' | 'consult';
+  stage: 'fetch' | 'drag' | 'return-fetch' | 'return' | 'approach' | 'waiting' | 'seated' | 'coffee' | 'attention' | 'consult';
   arrived: number | null; moving: boolean; order: number;
   sofaSlot: 0 | 1 | null;
   /** Time the actor reaches the coffee queue; seats are assigned by this arrival time. */
   sofaArrival: number | null;
   /** Cats only: index into the name list; the lowest free one, so names are reused after a cat leaves. */
-  nameIndex: number;
+  nameIndex: number; departing: boolean;
 }
 export interface OfficeState {
   actors: Map<string, Actor>; projects: Map<string, Project>; width: number; height: number; roomWidth: number;
@@ -53,16 +53,41 @@ function release(project: Project, id: string) {
   const index = project.queue.indexOf(id);
   if (index >= 0) project.queue.splice(index, 1);
 }
-export function syncOffice(state: OfficeState, agents: AgentInfo[]): void {
-  const current = new Set(agents.map(agent => agentKey(agent.ref)));
+function layoutProjects(state: OfficeState): void {
+  let x = state.roomWidth + 50;
+  for (const [key, project] of state.projects) {
+    if (!project.members.length && !project.carrier) { state.projects.delete(key); continue; }
+    project.x = x;
+    x += Math.max(155, (project.members.length - 1) * 24 + 100);
+  }
+  state.width = Math.max(1000, x + 200);
+  state.scale = Math.min(1, 1000 / state.width);
+}
+export function syncOffice(state: OfficeState, agents: AgentInfo[], complete = true): void {
+  const infos = complete ? agents : [...agents], current = new Set(agents.map(agent => agentKey(agent.ref)));
+  let departed: Map<string, Actor[]> | undefined;
+  if (!complete) for (const actor of state.actors.values()) {
+    if (!actor.departing && !current.has(actor.id)) { current.add(actor.id); infos.push(actor.info); }
+  }
   for (const [id, actor] of state.actors) {
-    if (current.has(id)) continue;
+    if (current.has(id)) { actor.departing = false; continue; }
     const project = state.projects.get(actor.project);
-    if (project) { release(project, id); if (project.carrier === id) project.carrier = null; }
+    if (!project) { state.actors.delete(id); continue; }
+    release(project, id);
+    if (project.carrier === id && (actor.stage === 'drag' || actor.stage === 'return-fetch' || actor.stage === 'return')) {
+      actor.departing = true;
+      continue;
+    }
+    if (project.installed) {
+      const actors = departed?.get(project.id) ?? [];
+      actors.push(actor);
+      departed ??= new Map(); departed.set(project.id, actors);
+    }
+    if (project.carrier === id) project.carrier = null;
     state.actors.delete(id);
   }
   for (const project of state.projects.values()) project.members = [];
-  for (const info of agents) {
+  for (const info of infos) {
     const id = agentKey(info.ref), key = info.cwd.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
     let project = state.projects.get(key);
     if (!project) {
@@ -73,23 +98,29 @@ export function syncOffice(state: OfficeState, agents: AgentInfo[]): void {
     let actor = state.actors.get(id);
     if (actor && actor.project !== key) {
       const old = state.projects.get(actor.project);
-      if (old) release(old, id);
+      if (old) { release(old, id); if (old.carrier === id) old.carrier = null; }
       state.actors.delete(id); actor = undefined;
     }
     if (!actor) {
-      const parent = info.parent ? state.actors.get(agentKey(info.parent)) : undefined;
+      const candidate = info.parent ? state.actors.get(agentKey(info.parent)) : undefined;
+      const parent = candidate && !candidate.departing ? candidate : undefined;
       let nameIndex = -1;
       if (!info.parent) {
-        const taken = new Set([...state.actors.values()].map(other => other.nameIndex));
+        const taken = new Set([...state.actors.values()].filter(other => !other.departing).map(other => other.nameIndex));
         nameIndex = 0;
         while (taken.has(nameIndex)) nameIndex++;
       }
       actor = { id, info, project: key, x: parent ? parent.x + 18 : 62, y: parent ? Math.min(parent.y + 18, 135) : 120,
-        stage: 'approach', arrived: null, moving: false, order: state.serial++, sofaSlot: null, sofaArrival: null, nameIndex };
+        stage: 'approach', arrived: null, moving: false, order: state.serial++, sofaSlot: null, sofaArrival: null, nameIndex, departing: false };
       state.actors.set(id, actor);
     }
+    actor.departing = false;
     actor.info = info;
-    if (project.carrier === id) continue; // Delivering the desk finishes first; phase applies on arrival.
+    if (project.carrier === id) {
+      if (actor.stage === 'return') { project.installed = false; actor.stage = 'drag'; continue; }
+      if (actor.stage === 'return-fetch') { project.carrier = null; actor.stage = 'approach'; actor.arrived = null; }
+      else continue; // Delivery finishes before the agent's current phase applies.
+    }
     const resting = restingStage(info);
     if (resting) {
       if (resting !== 'coffee' || actor.stage !== 'coffee') clearSofa(actor);
@@ -98,24 +129,39 @@ export function syncOffice(state: OfficeState, agents: AgentInfo[]): void {
       clearSofa(actor); actor.stage = 'approach'; actor.arrived = null;
     }
   }
-  const resting = agents.filter(info => restingStage(info) === 'coffee').length;
+  for (const [key, project] of state.projects) {
+    const carrier = project.carrier ? state.actors.get(project.carrier) : undefined;
+    if (!project.members.length) {
+      if (carrier?.stage === 'fetch') {
+        state.actors.delete(carrier.id); project.carrier = null;
+      } else if (carrier?.stage === 'drag') {
+        carrier.departing = true; carrier.stage = 'return'; project.installed = false;
+      } else if (!carrier && project.installed) {
+        const candidates = departed?.get(key) ?? [];
+        const courier = candidates.filter(actor => !actor.info.parent).sort((a, b) => b.order - a.order)[0] ??
+          candidates.sort((a, b) => b.order - a.order)[0];
+        if (courier) {
+          clearSofa(courier); courier.departing = true; courier.arrived = null; courier.moving = false; courier.stage = 'return-fetch';
+          state.actors.set(courier.id, courier); project.carrier = courier.id;
+        }
+      }
+      if (!project.carrier) state.projects.delete(key);
+      continue;
+    }
+    if (carrier?.departing && carrier.stage === 'return') carrier.stage = 'drag';
+    else if (carrier?.departing && carrier.stage === 'return-fetch') { state.actors.delete(carrier.id); project.carrier = null; }
+    if (!project.installed && !project.carrier) {
+      const courier = project.members.map(id => state.actors.get(id)!).find(actor => !actor.info.parent);
+      if (courier) { project.carrier = courier.id; courier.stage = 'fetch'; }
+      else project.installed = true; // Subagents can use a project, but cannot fetch its desk.
+    }
+  }
+  const resting = infos.filter(info => restingStage(info) === 'coffee').length;
   const last = Math.max(resting - 1, 0), group = Math.floor(last / COFFEE_GROUP_SIZE), within = last % COFFEE_GROUP_SIZE;
   const rightmost = resting ? COFFEE_WAIT_X + group * COFFEE_COLUMNS * COFFEE_WAIT_GAP +
     Math.min(within, COFFEE_COLUMNS - 1) * COFFEE_WAIT_GAP + 25 : 210;
   state.roomWidth = Math.max(210, rightmost);
-  let x = state.roomWidth + 50;
-  for (const [key, project] of state.projects) {
-    if (!project.members.length) { state.projects.delete(key); continue; }
-    project.x = x;
-    x += Math.max(155, (project.members.length - 1) * 24 + 100);
-    if (!project.installed && !project.carrier) {
-      const carrier = project.members.map(id => state.actors.get(id)!).find(actor => !actor.info.parent);
-      if (carrier) { project.carrier = carrier.id; carrier.stage = 'fetch'; }
-      else project.installed = true; // Only subagents here: no cat to carry the desk.
-    }
-  }
-  state.width = Math.max(1000, x + 200);
-  state.scale = Math.min(1, 1000 / state.width);
+  layoutProjects(state);
   assignSofaSlots(state);
 }
 function restingStage(info: AgentInfo): Actor['stage'] | null {
@@ -137,13 +183,26 @@ export function advanceOffice(state: OfficeState, dt: number): void {
     .sort((a, b) => a.order - b.order);
   const coffeeWaitIndex = new Map<Actor, number>();
   coffeeWaiters.forEach((actor, index) => coffeeWaitIndex.set(actor, index));
+  let relayout = false;
   for (const actor of state.actors.values()) {
     const project = state.projects.get(actor.project)!;
     actor.moving = false;
     if (actor.stage === 'fetch') {
       if (move(actor, 111, 118, dt)) actor.stage = 'drag';
     } else if (actor.stage === 'drag') {
-      if (move(actor, project.x + 28, 122, dt)) { project.installed = true; project.carrier = null; actor.stage = restingStage(actor.info) ?? 'approach'; }
+      if (move(actor, project.x + 28, 122, dt)) {
+        project.installed = true; project.carrier = null;
+        if (actor.departing) state.actors.delete(actor.id);
+        else actor.stage = restingStage(actor.info) ?? 'approach';
+      }
+    } else if (actor.stage === 'return-fetch') {
+      if (move(actor, project.x + 28, 122, dt)) { project.installed = false; actor.stage = 'return'; }
+    } else if (actor.stage === 'return') {
+      if (move(actor, 111, 118, dt)) {
+        state.actors.delete(actor.id); project.carrier = null;
+        if (project.members.length) project.installed = false;
+        else { state.projects.delete(project.id); relayout = true; }
+      }
     } else if (actor.stage === 'coffee') {
       if (actor.sofaSlot !== null) move(actor, SOFA_X[actor.sofaSlot], SOFA_Y, dt);
       else {
@@ -160,7 +219,8 @@ export function advanceOffice(state: OfficeState, dt: number): void {
     } else if (actor.stage === 'attention') {
       move(actor, state.width - 130 - actor.order % 3 * 22, 113, dt);
     } else if (actor.stage === 'consult') {
-      const parent = actor.info.parent ? state.actors.get(agentKey(actor.info.parent)) : undefined;
+      const candidate = actor.info.parent ? state.actors.get(agentKey(actor.info.parent)) : undefined;
+      const parent = candidate && !candidate.departing ? candidate : undefined;
       move(actor, parent ? parent.x - 24 : project.x, parent ? Math.min(parent.y + 8, 135) : 120, dt);
     } else {
       if (project.seat === actor.id) {
@@ -183,5 +243,6 @@ export function advanceOffice(state: OfficeState, dt: number): void {
     project.queue.push(...arrived.map(actor => actor.id));
     if (!project.seat && project.queue.length) project.seat = project.queue.shift()!;
   }
+  if (relayout) layoutProjects(state);
   assignSofaSlots(state);
 }

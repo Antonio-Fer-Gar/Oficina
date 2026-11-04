@@ -5,8 +5,25 @@ export interface CharacterMotion { walking?: boolean; frame?: 0 | 1; activity?: 
 import { DEFAULT_HUMAN, DEFAULT_ROBOT_COLORS, type Breed, type HumanGender, type HumanHairColor, type HumanHairStyle, type HumanSkin, type Outfit, type RobotColor } from './appearance.ts';
 import type { ModelRef } from '../bridge/protocol.ts';
 import type { ActivityKind } from '../activity.ts';
-type ModelBadge = { kind: 'octopus' | 'sun' | 'moon' | 'earth' | 'text'; label: string };
+type ModelBadge = { kind: 'octopus' | 'sun' | 'moon' | 'earth' | 'grok' | 'text'; label: string };
 const UNKNOWN_MODEL_BADGE: ModelBadge = { kind: 'text', label: 'N/D' };
+// Grok's mark, kept as a vector so it remains recognizable at scene scale.
+const GROK_MARK = 'm231.8 382.3 199.4-147.5c9.8-7.2 23.8-4.4 28.4 6.8A164 164 0 0 1 424.4 421c-48.8 48.8-116.7 59.5-178.7 35.1l-67.8 31.4c97.2 66.6 215.3 50.1 289-23.8a223 223 0 0 0 59.7-210.5l.2.2c-24.6-105.8 6-148.1 68.7-234.6l4.5-6.2-82.5 82.6V95L231.7 382.3m-41.1 35.8c-69.8-66.8-57.8-170 1.8-229.6a166 166 0 0 1 179.1-35.7l67.6-31.2a195 195 0 0 0-45.7-25 224 224 0 0 0-243.8 49.2 226 226 0 0 0-49 244C126 452 84.2 496 42 540.5c-15 15.7-30 31.4-42 48z';
+function modelBadgeFor(model: ModelRef): ModelBadge {
+  // Gateways such as GitHub Copilot keep the underlying model identity in id or name.
+  for (const identity of [model.id, model.name]) {
+    if (/(^|[^a-z])grok([^a-z]|$)/i.test(identity)) {
+      const versionPattern = /grok(?:[-_ ./]+[a-z]+)*[-_ ./]+(\d+)(?:[._-](\d{1,2})(?=$|[-_ ./]))?/i;
+      const version = model.id.match(versionPattern) ?? model.name.match(versionPattern);
+      return { kind: 'grok', label: version ? version[1] + (version[2] ? '.' + version[2] : '') : '' };
+    }
+    if (/(^|[^a-z])opus([^a-z]|$)/i.test(identity)) return { kind: 'octopus', label: '' };
+    if (/(^|[^a-z])sol([^a-z]|$)/i.test(identity)) return { kind: 'sun', label: '' };
+    if (/(^|[^a-z])luna([^a-z]|$)/i.test(identity)) return { kind: 'moon', label: '' };
+    if (/(^|[^a-z])terra([^a-z]|$)/i.test(identity)) return { kind: 'earth', label: '' };
+  }
+  return { kind: 'text', label: (model.name || model.id).slice(0, 6) };
+}
 // Terra's globe: ocean disc, the Americas and Europe/Africa, polar ice and a night-side shade; the corners stay transparent.
 const EARTH: ReadonlyArray<readonly [number, number, number, number, string]> = [
   [-2, -7, 5, 15, '#3f86cf'], [-4, -6, 9, 13, '#3f86cf'], [-5, -5, 11, 11, '#3f86cf'], [-6, -4, 13, 9, '#3f86cf'], [-7, -2, 15, 5, '#3f86cf'],
@@ -44,6 +61,7 @@ const HUMAN_COLLAR = '#f4f1e8';
 const HUMAN_STRESS = '#55b878';
 export class Painter {
   private readonly modelBadges = new WeakMap<ModelRef, ModelBadge>();
+  private grokMark: Path2D | null = null;
   /** Fur of the latest `character`, so `activityProp` closes a paw of the same colour over the held tool. */
   private lastFur = '#aba5ae';
   private lastRobot = false;
@@ -436,13 +454,8 @@ export class Painter {
   modelBadge(x: number, y: number, model: ModelRef | null) {
     let badge = model ? this.modelBadges.get(model) : UNKNOWN_MODEL_BADGE;
     if (!badge) {
-      const identity = model ? `${model.id} ${model.name}`.toLowerCase() : '';
-      badge = { kind: /(^|[^a-z])opus([^a-z]|$)/.test(identity) ? 'octopus'
-        : /(^|[^a-z])sol([^a-z]|$)/.test(identity) ? 'sun'
-        : /(^|[^a-z])luna([^a-z]|$)/.test(identity) ? 'moon'
-        : /(^|[^a-z])terra([^a-z]|$)/.test(identity) ? 'earth' : 'text',
-        label: model ? (model.name || model.id).slice(0, 6) : 'N/D' };
-      if (model) this.modelBadges.set(model, badge);
+      badge = modelBadgeFor(model!);
+      this.modelBadges.set(model!, badge);
     }
     const c = this.c;
     c.save(); c.translate(Math.round(x), Math.round(y - (this.lastRobot ? 5 : 0)));
@@ -461,6 +474,13 @@ export class Painter {
       this.rect(-4, 6, 8, 3, '#d3ac4c'); this.rect(1, 4, 3, 3, '#e8c971');
     } else if (badge.kind === 'earth') {
       for (const [dx, dy, w, h, color] of EARTH) this.rect(dx, dy, w, h, color);
+    } else if (badge.kind === 'grok') {
+      c.font = 'bold 6px monospace';
+      const width = badge.label ? c.measureText(badge.label).width + 2 : 0;
+      c.fillStyle = '#34434a';
+      c.save(); c.translate(-width / 2, 0); c.scale(0.025, 0.025); c.translate(-300, -300);
+      c.fill(this.grokMark ??= new Path2D(GROK_MARK)); c.restore();
+      if (badge.label) c.fillText(badge.label, 9 - width / 2, 2);
     } else {
       c.font = '5px monospace';
       const width = c.measureText(badge.label).width;
