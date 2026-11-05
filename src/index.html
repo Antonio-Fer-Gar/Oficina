@@ -13,6 +13,7 @@
   <div class="toolbar">
     <span id="status" class="status">Conectando…</span>
     <button id="history-button" type="button">Historial</button>
+    <button id="skills-button" type="button">Skills</button>
     <button id="mute" type="button" aria-pressed="false">Sonido</button>
     <button id="customize-button" type="button">Ajustes</button>
     <button id="minimize" type="button" aria-label="Minimizar">–</button>
@@ -89,7 +90,17 @@
     <p id="boss-workload" class="hint"></p>
     <button id="usage-refresh" type="button">Actualizar usage</button>
     <p id="usage-status" class="hint" role="status"></p>
-    <pre id="usage-content"></pre>
+    <div id="usage-content" class="usage-content"></div>
+  </section>
+  <section id="skills" class="panel skills" aria-labelledby="skills-title" hidden>
+    <header><strong id="skills-title">Skills globales</strong><button id="skills-close" type="button" aria-label="Cerrar skills">×</button></header>
+    <p>Las skills activadas estarán disponibles en cualquier proyecto y omp recibirá la instrucción de leerlas al empezar cada tarea. El agente decide cómo aplicarlas. Inicia una sesión nueva para aplicar los cambios.</p>
+    <p>Adjunta solo skills de confianza: pueden contener instrucciones y scripts. La oficina no ejecuta esos scripts.</p>
+    <button id="skills-import" type="button">Seleccionar carpeta</button>
+    <button id="skills-import-file" type="button">Adjuntar archivo SKILL.md</button>
+    <p class="hint">La carpeta incluye todos sus recursos; al seleccionar SKILL.md se adjunta solo ese archivo.</p>
+    <p id="skills-status" class="hint" role="status" aria-live="polite"></p>
+    <ul id="skills-list" class="skills-list"></ul>
   </section>
   <section id="setup" class="panel setup" hidden>
     <header><strong id="setup-title">Ajustes</strong><button id="setup-close" type="button" aria-label="Cerrar ajustes">×</button></header>

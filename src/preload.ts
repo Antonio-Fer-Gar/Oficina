@@ -5,6 +5,7 @@ import type { FocusResult } from './terminal.ts';
 import type { Appearance } from './office/appearance.ts';
 import type { OfficeNames, Rename } from './office/names.ts';
 import type { UsageResult } from './usage.ts';
+import type { ManagedSkill } from './skills.ts';
 
 export interface OfficeUpdate { agents: AgentInfo[]; complete: boolean }
 export interface OfficeApi {
@@ -24,6 +25,9 @@ export interface OfficeApi {
   names(): Promise<OfficeNames>;
   rename(request: Rename): Promise<OfficeNames>;
   usage(): Promise<UsageResult>;
+  skillsList(): Promise<ManagedSkill[]>;
+  skillsImport(kind: 'folder' | 'file'): Promise<ManagedSkill[] | null>;
+  skillsSetEnabled(id: string, enabled: boolean): Promise<ManagedSkill[]>;
   version(): Promise<string>;
   checkAppUpdate(): Promise<{ version: string; currentVersion: string; notes: string } | null>;
   installAppUpdate(): Promise<{ ok: boolean; message: string }>;
@@ -60,6 +64,9 @@ const api: OfficeApi = {
   names: () => ipcRenderer.invoke('office:names'),
   rename: request => ipcRenderer.invoke('office:rename', request),
   usage: () => ipcRenderer.invoke('office:usage'),
+  skillsList: () => ipcRenderer.invoke('office:skills-list'),
+  skillsImport: kind => ipcRenderer.invoke('office:skills-import', kind),
+  skillsSetEnabled: (id, enabled) => ipcRenderer.invoke('office:skills-set-enabled', id, enabled),
   version: () => ipcRenderer.invoke('office:version'),
   checkAppUpdate: () => ipcRenderer.invoke('office:check-app-update'),
   installAppUpdate: () => ipcRenderer.invoke('office:install-app-update'),

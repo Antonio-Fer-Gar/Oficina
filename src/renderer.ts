@@ -9,6 +9,7 @@ import {
 } from './office/appearance.ts';
 import { agentKey, createOffice, isWorking, syncOffice, type Actor, type Project } from './state.ts';
 import { actorName, catNameKey, moleActor, projectName, type OfficeNames } from './office/names.ts';
+import type { ManagedSkill } from './skills.ts';
 
 declare global { interface Window { office: OfficeApi } }
 const office = window.office;
@@ -280,6 +281,7 @@ function fillCard(actor: Actor) {
 }
 async function openCard(actor: Actor) {
   $('project').hidden = true; selectedProject = null;
+  $('skills').hidden = true;
   $('boss').hidden = true; $('setup').hidden = true;
   $('cat-name-form').hidden = !!actor.info.parent;
   $<HTMLInputElement>('cat-name-input').value = names.cats[catNameKey(actor.info)] ?? '';
@@ -481,14 +483,29 @@ async function refreshUsage() {
   try {
     const result = await office.usage();
     if (result.ok) {
-      $('usage-content').textContent = result.text; $('usage-status').textContent = 'Datos actualizados.';
+      const content = $('usage-content');
+      for (const line of result.lines) {
+        const row = document.createElement('div');
+        row.textContent = line.text || '\u00a0';
+        content.append(row);
+        if (line.usedPercent !== undefined) {
+          const meter = document.createElement('div'), progress = document.createElement('progress');
+          meter.className = 'usage-meter';
+          progress.max = 100; progress.value = line.usedPercent;
+          progress.setAttribute('aria-label', line.text);
+          const start = document.createElement('span'), end = document.createElement('span');
+          start.textContent = '0 %'; end.textContent = '100 %';
+          meter.append(start, progress, end); content.append(meter);
+        }
+      }
+      $('usage-status').textContent = 'Datos actualizados.';
     } else { $('usage-status').textContent = result.message; $('usage-status').classList.add('error'); }
   } catch (error) { $('usage-status').textContent = 'No se pudo consultar usage: ' + String(error); $('usage-status').classList.add('error'); }
   finally { usageLoading = false; $<HTMLButtonElement>('usage-refresh').disabled = false; }
 }
 async function openBoss() {
   selected = null; selectedProject = null;
-  for (const id of ['card', 'project', 'history', 'setup']) $(id).hidden = true;
+  for (const id of ['card', 'project', 'history', 'setup', 'skills']) $(id).hidden = true;
   $('boss').hidden = false;
   await refreshUsage();
 }
@@ -521,6 +538,7 @@ function fillProject(project: Project) {
 }
 function openProject(project: Project) {
   $('boss').hidden = true;
+  $('skills').hidden = true;
   $<HTMLInputElement>('project-name-input').value = names.projects[project.id] ?? '';
   $('project-name-result').textContent = '';
   selected = null; selectedProject = project.id;
@@ -532,6 +550,7 @@ $('project-close').onclick = () => { $('project').hidden = true; selectedProject
 async function openHistory() {
   $('project').hidden = true; selectedProject = null;
   $('boss').hidden = true;
+  $('skills').hidden = true; $('setup').hidden = true;
   $('history').hidden = false; $('card').hidden = true; selected = null;
   const rows = $('history-rows'); rows.replaceChildren();
   const records = await office.history().catch(() => []);
@@ -564,6 +583,62 @@ async function openHistory() {
 }
 $('history-button').onclick = () => void openHistory();
 $('history-close').onclick = () => { $('history').hidden = true; };
+
+let managedSkills: ManagedSkill[] = [], skillsBusy = false;
+function renderSkills() {
+  const list = $('skills-list'); list.replaceChildren();
+  for (const skill of managedSkills) {
+    const item = document.createElement('li'), label = document.createElement('label');
+    const input = document.createElement('input'), name = document.createElement('span');
+    input.type = 'checkbox'; input.checked = skill.enabled; input.disabled = skillsBusy;
+    name.textContent = skill.name;
+    label.append(input, name); item.append(label);
+    if (skill.description) {
+      const description = document.createElement('p');
+      description.className = 'hint'; description.textContent = skill.description; item.append(description);
+    }
+    input.onchange = () => {
+      void runSkills(() => office.skillsSetEnabled(skill.id, input.checked), 'Guardando cambio…', 'Cambio guardado.');
+    };
+    list.append(item);
+  }
+  $<HTMLButtonElement>('skills-import').disabled = skillsBusy;
+  $<HTMLButtonElement>('skills-import-file').disabled = skillsBusy;
+}
+async function runSkills(action: () => Promise<ManagedSkill[] | null>, loading: string, success: string) {
+  if (skillsBusy) return;
+  skillsBusy = true; renderSkills();
+  const status = $('skills-status');
+  status.classList.remove('error'); status.textContent = loading;
+  try {
+    const result = await action();
+    if (result === null) status.textContent = 'Selección cancelada.';
+    else {
+      managedSkills = result;
+      status.textContent = managedSkills.length ? success : `${success} No hay skills adjuntadas.`;
+    }
+  } catch (error) {
+    status.classList.add('error');
+    status.textContent = `No se pudo completar la operación: ${error instanceof Error ? error.message : String(error)}`;
+  } finally {
+    skillsBusy = false; renderSkills();
+  }
+}
+function openSkills() {
+  selected = null; selectedProject = null;
+  if (!$('setup').hidden) { scene.setAppearance(appearance); $('setup').hidden = true; updateThemeText(); }
+  for (const id of ['card', 'project', 'history', 'boss']) $(id).hidden = true;
+  $('skills').hidden = false;
+  if (!skillsBusy) void runSkills(() => office.skillsList(), 'Cargando skills…', 'Skills cargadas.');
+}
+$('skills-button').onclick = openSkills;
+$('skills-close').onclick = () => { $('skills').hidden = true; };
+$('skills-import').onclick = () => {
+  void runSkills(() => office.skillsImport('folder'), 'Seleccionando carpeta…', 'Skill adjuntada.');
+};
+$('skills-import-file').onclick = () => {
+  void runSkills(() => office.skillsImport('file'), 'Seleccionando archivo…', 'Skill adjuntada.');
+};
 $('minimize').onclick = () => office.minimize();
 $('close').onclick = () => office.close();
 $('mute').onclick = () => {
@@ -728,6 +803,7 @@ function renderOptions() {
 function openCustomize(firstRun = false) {
   $('project').hidden = true; selectedProject = null;
   $('boss').hidden = true;
+  $('skills').hidden = true;
   draft = {
     ...appearance, outfits: { ...appearance.outfits },
     robotColors: { ...DEFAULT_ROBOT_COLORS, ...(appearance.robotColors ?? DEFAULT_ROBOT_COLORS) },

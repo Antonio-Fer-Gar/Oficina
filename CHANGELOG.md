@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.12
+
+### Added
+
+- Panel de skills globales adjuntables con activación y desactivación para nuevas sesiones de omp.
+- Barras de 0 a 100 % para los porcentajes de uso mostrados en el panel del jefe.
+
 ## 0.1.11
 
 ### Added

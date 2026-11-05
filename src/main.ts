@@ -15,6 +15,7 @@ import { OfficeNamesSchema, RenameSchema, catNameKey, projectNameKey, type Offic
 import { fetchUsage } from './usage.ts';
 import { conversationAction } from './resume.ts';
 import { checkAppUpdate, downloadInstaller, latestAppUpdate, type DownloadedUpdate } from './app-update.ts';
+import { importManagedSkill, listManagedSkills, setManagedSkillEnabled } from './skills.ts';
 import { z } from 'zod';
 
 const dataDir = process.env.NTER_OFFICE_DATA ?? join(process.env.LOCALAPPDATA ?? homedir(), 'nter-omp-office');
@@ -214,6 +215,18 @@ ipcMain.handle('office:show-folder', async (_event, profile: unknown, sessionId:
   return error || null;
 });
 ipcMain.handle('office:muted', () => preferences().muted);
+ipcMain.handle('office:skills-list', () => listManagedSkills(homedir(), dataDir));
+ipcMain.handle('office:skills-import', async (_event, input: unknown) => {
+  const kind = z.enum(['folder', 'file']).parse(input);
+  const options: Electron.OpenDialogOptions = kind === 'folder'
+    ? { title: 'Selecciona una carpeta que contenga SKILL.md', properties: ['openDirectory'] }
+    : { title: 'Selecciona un archivo SKILL.md', properties: ['openFile'], filters: [{ name: 'Markdown', extensions: ['md'] }] };
+  const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+  if (result.canceled || !result.filePaths[0]) return null;
+  return importManagedSkill(homedir(), dataDir, result.filePaths[0]);
+});
+ipcMain.handle('office:skills-set-enabled', (_event, id: unknown, enabled: unknown) =>
+  setManagedSkillEnabled(homedir(), dataDir, z.string().parse(id), z.boolean().parse(enabled)));
 const bridgePlan = () => planBridgeInstall({ source: join(root, 'dist', 'extension.js'), profile: 'default' });
 ipcMain.handle('office:bridge-status', () => bridgePlan().action);
 ipcMain.handle('office:bridge-install', () => {

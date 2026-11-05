@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process';
 import { join } from 'node:path';
 
-export type UsageResult = { ok: true; text: string } | { ok: false; message: string };
+export interface UsageLine { text: string; usedPercent?: number }
+export type UsageResult = { ok: true; lines: UsageLine[] } | { ok: false; message: string };
 
 const TIMEOUT_MS = 60_000;
 const MAX_OUTPUT_BYTES = 1024 * 1024;
@@ -18,6 +19,12 @@ export function cleanUsageOutput(output: string): string {
     .replace(/\bused\b/g, 'usado').replace(/\baccount(s?)\b/g, (_, plural: string) => plural ? 'cuentas' : 'cuenta')
     .replace(/\bcapacity:/g, 'Capacidad:').replace(/\bfetched\b/g, 'actualizado hace').replace(/\bago\b/g, '')
     .split('\n').map(line => line.trim()).join('\n').trim();
+}
+export function parseUsageLines(text: string): UsageLine[] {
+  return text.split('\n').map(line => {
+    const match = /(?<![\d.,-])(\d+(?:\.\d+)?)%\s+usado\b/i.exec(line);
+    return match ? { text: line, usedPercent: Math.min(100, Number(match[1])) } : { text: line };
+  });
 }
 let inFlight: Promise<UsageResult> | undefined;
 
@@ -55,7 +62,7 @@ function runUsage(): Promise<UsageResult> {
 
     const text = cleanUsageOutput(stdout);
     resolve(text
-      ? { ok: true, text }
+      ? { ok: true, lines: parseUsageLines(text) }
       : { ok: false, message: 'omp usage no devolvió información.' });
   });
   return promise;

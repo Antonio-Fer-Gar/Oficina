@@ -32,6 +32,15 @@ button[aria-pressed="true"] { background: #d9dccd; }
 .app-update-close { position: absolute; top: 10px; right: 10px; }
 .panel { position: absolute; top: 34px; bottom: 8px; background: #f8f7f1; border: 1px solid #8c9882; box-shadow: 0 6px 22px #0003; padding: 8px 12px; overflow: auto; user-select: text; }
 .panel header { position: sticky; top: -8px; z-index: 2; display: flex; justify-content: space-between; align-items: center; margin: -8px -12px 6px; padding: 8px 12px; background: #f8f7f1; }
+.skills { right: 10px; width: min(440px, calc(100% - 20px)); }
+.skills p { overflow-wrap: anywhere; }
+.skills-list { list-style: none; margin: 8px 0; padding: 0; }
+.skills-list li { padding: 8px 0; border-top: 1px solid #dfe0d6; overflow-wrap: anywhere; }
+.skills-list label { display: flex; align-items: flex-start; gap: 6px; font-weight: 600; }
+.skills-list input { flex: none; margin: 3px 0 0; }
+.skills-list .hint { margin-left: 19px; white-space: pre-wrap; }
+@media (max-width: 600px) { .toolbar .status { display: none; } }
+@media (max-width: 400px) { .toolbar { gap: 2px; padding-inline: 4px; } .toolbar button { padding-inline: 5px; } }
 .card { right: 10px; width: 360px; }
 .card dl { display: grid; grid-template-columns: 70px 1fr; gap: 2px 8px; margin: 0 0 8px; }
 .card dt { color: #6d756a; } .card dd { margin: 0; word-break: break-all; }
@@ -87,4 +96,6 @@ button.primary { background: #8c9882; color: #fff; }
 .project-cats { list-style: none; margin: 6px 0; padding: 0; }
 .project-cats li { margin: 4px 0; }
 .project-cats button { width: 100%; text-align: left; overflow-wrap: anywhere; }
-.usage pre { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.45 Consolas, "Cascadia Mono", monospace; user-select: text; }
+.usage-content { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.45 Consolas, "Cascadia Mono", monospace; user-select: text; }
+.usage-meter { display: flex; align-items: center; gap: 7px; max-width: 420px; margin: 2px 0 7px; color: #5d655a; font: 11px system-ui, "Segoe UI", sans-serif; }
+.usage-meter progress { flex: 1; min-width: 0; height: 12px; accent-color: #59684f; }
