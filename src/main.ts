@@ -32,6 +32,7 @@ let installingUpdate = false;
 let updateSignalSent = false;
 let updateExitTimer: ReturnType<typeof setTimeout> | null = null;
 let updateHelper: ChildProcessWithoutNullStreams | null = null;
+let offeredUpdateVersion: string | null = null;
 const pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void }>();
 
 const PreferencesSchema = z.object({
@@ -242,7 +243,11 @@ ipcMain.handle('office:rename', (_event, value: unknown): OfficeNames => {
 });
 ipcMain.handle('office:usage', () => fetchUsage());
 ipcMain.handle('office:version', () => app.getVersion());
-ipcMain.handle('office:check-app-update', () => checkAppUpdate(app.getVersion()));
+ipcMain.handle('office:check-app-update', async () => {
+  const update = await checkAppUpdate(app.getVersion());
+  offeredUpdateVersion = update?.version ?? null;
+  return update;
+});
 async function installAppUpdate() {
   if (!app.isPackaged || process.platform !== 'win32' || process.arch !== 'x64') {
     return { ok: false, message: 'La instalación automática solo está disponible en la aplicación instalada para Windows x64.' };
@@ -253,6 +258,7 @@ async function installAppUpdate() {
   try {
     const release = await latestAppUpdate(app.getVersion());
     if (!release) return { ok: false, message: 'No hay una release más reciente para instalar.' };
+    if (release.version !== offeredUpdateVersion) return { ok: false, message: 'Hay una versión distinta a la del aviso. Cierra y abre la oficina para ver sus novedades antes de actualizar.' };
     downloaded = await downloadInstaller(release);
     updateHelper = await startUpdateHelper(downloaded);
     installingUpdate = true;

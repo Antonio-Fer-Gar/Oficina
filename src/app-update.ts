@@ -24,6 +24,7 @@ export interface UpdateRelease {
   assetUrl: string;
   size: number;
   digest: string;
+  notes: string;
 }
 export interface DownloadedUpdate {
   directory: string;
@@ -67,7 +68,11 @@ export function parseUpdateRelease(value: unknown): UpdateRelease | null {
   const expectedUrl = `https://github.com/${REPOSITORY}/releases/download/${tag}/${expectedName}`;
   if (asset.state !== 'uploaded' || !Number.isSafeInteger(asset.size) || (asset.size as number) < 1
     || (asset.size as number) > MAX_ASSET_SIZE || !digest || asset.browser_download_url !== expectedUrl) return null;
-  return { version, assetName: expectedName, assetUrl: expectedUrl, size: asset.size as number, digest: digest[1]!.toLowerCase() };
+  const body = typeof value.body === 'string' ? value.body.trim() : '';
+  const bullets = body.split(/\r?\n/).filter(line => /^\s*[-*]\s+/.test(line));
+  const summary = (bullets.length ? bullets.join('\n') : body) || 'Esta versión no incluye notas de cambios.';
+  const notes = summary.length > 4000 ? summary.slice(0, 3999) + '…' : summary;
+  return { version, assetName: expectedName, assetUrl: expectedUrl, size: asset.size as number, digest: digest[1]!.toLowerCase(), notes };
 }
 
 export async function latestAppUpdate(currentVersion: string, request: Requester = fetch): Promise<UpdateRelease | null> {
@@ -86,10 +91,10 @@ export async function latestAppUpdate(currentVersion: string, request: Requester
   return compareVersions(release.version, currentVersion) > 0 ? release : null;
 }
 
-export async function checkAppUpdate(currentVersion: string, request: Requester = fetch): Promise<{ version: string; currentVersion: string } | null> {
+export async function checkAppUpdate(currentVersion: string, request: Requester = fetch): Promise<{ version: string; currentVersion: string; notes: string } | null> {
   try {
     const release = await latestAppUpdate(currentVersion, request);
-    return release ? { version: release.version, currentVersion } : null;
+    return release ? { version: release.version, currentVersion, notes: release.notes } : null;
   } catch {
     return null;
   }

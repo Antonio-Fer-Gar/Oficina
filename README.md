@@ -69,7 +69,7 @@ El instalador que generes localmente tampoco estará firmado.
 - **Mesas seleccionables.** Al pulsar una mesa se abre la ficha del proyecto con su nombre, carpeta y agentes asignados; al pulsar uno se abre su ficha. **Nombre de la mesa → Guardar nombre** cambia su nombre visual.
 - **Jefe y usage.** Pulsar tu personaje —perro en Animales, humano en Robots— abre las cuotas y límites reales de omp, equivalentes a `/usage`, con identificadores de cuenta ocultos. **Actualizar usage** vuelve a consultarlos.
 - **Estrés.** Tu personaje muestra una señal progresiva de estrés según los agentes y subagentes trabajando; disminuye cuando baja la carga.
-- **Actualizaciones.** La versión instalada aparece en la esquina inferior derecha. Al abrirse, la oficina consulta la última release estable publicada en GitHub. Si es más reciente, pulsa el aviso para descargar el instalador y actualizar: comprueba su tamaño y SHA-256, cierra la oficina, instala en la misma carpeta y la vuelve a abrir, sin cerrar tus sesiones de omp ni borrar preferencias o historial. Si falla antes de instalar, muestra el error y permite reintentar. Sin conexión no interrumpe el inicio.
+- **Actualizaciones.** La versión instalada aparece en la esquina inferior derecha. Al abrirse, la oficina consulta la última release estable de GitHub y, si es más reciente, muestra sus novedades y un tiempo orientativo de 3–10 minutos; puede tardar más según la conexión y el equipo. Basta con pulsar el aviso: descarga y comprueba el instalador, cierra la oficina, instala en la misma carpeta y vuelve a abrirla, sin cerrar sesiones de omp ni borrar preferencias o historial. Si falla, informa del error. Sin conexión no interrumpe el inicio.
 
 ## Personalización
 
@@ -175,7 +175,7 @@ $bun = '.\.superpowers\tools\bun-windows-x64\bun.exe'
 
 `bun run dist` genera `release\win-unpacked\Oficina nter.exe` y un instalador NSIS que incluye Electron y Bun. El equipo de destino no necesita Node ni Bun instalados. Los ejecutables no están firmados.
 
-Para publicar una nueva versión, incrementa `version` en `package.json` con tres números (`mayor.menor.parche`), comprueba y publica el código en `main`, genera el instalador y adjúntalo a una release estable en GitHub con la etiqueta `v<versión>`. Para la actualización automática el asset debe llamarse `Oficina.nter.Setup.<versión>.exe` y GitHub debe informar su SHA-256. La verificación de integridad no sustituye a una firma digital: el instalador sigue sin firmar.
+Para publicar una nueva versión, incrementa `version` en `package.json` con tres números (`mayor.menor.parche`), comprueba y publica el código en `main`, genera el instalador y adjúntalo a una release estable en GitHub con la etiqueta `v<versión>`. La rama `main` y las etiquetas de versión están protegidas: solo la cuenta propietaria puede modificarlas o publicarlas en el repositorio oficial. Los usuarios pueden crear forks independientes. Para la actualización automática el asset debe llamarse `Oficina.nter.Setup.<versión>.exe` y GitHub debe informar su SHA-256. La verificación de integridad no sustituye a una firma digital: el instalador sigue sin firmar.
 
 El icono de Windows es `assets\nter-logo.ico` (256, 128, 64, 48, 32 y 16 px), derivado de `assets\nter-logo.png`. Se incluye ya convertido porque el conversor de iconos de electron-builder se queda bloqueado al ejecutarse con Bun; si cambias el logo, regenera también el `.ico`.
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11
+
+### Added
+
+- El aviso de actualización muestra las novedades de la release, un tiempo orientativo y que la oficina se instala y reabre automáticamente.
+
 ## 0.1.10
 
 ### Added

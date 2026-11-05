@@ -577,9 +577,12 @@ void office.muted().then(value => { muted = value; $('mute').setAttribute('aria-
 void office.version().then(version => { $('app-version').textContent = 'v' + version; });
 function showAppUpdate(update: unknown) {
   if (!update || typeof update !== 'object') return;
-  const { version, currentVersion } = update as { version?: unknown; currentVersion?: unknown };
+  const { version, currentVersion, notes } = update as { version?: unknown; currentVersion?: unknown; notes?: unknown };
   if (typeof version !== 'string' || typeof currentVersion !== 'string' || !version.trim() || !currentVersion.trim()) return;
   $('app-update-versions').textContent = `Versión instalada: ${currentVersion} · Nueva versión: ${version}`;
+  const noteElement = $('app-update-notes');
+  noteElement.replaceChildren();
+  appendEmphasis(noteElement, typeof notes === 'string' && notes.trim() ? notes : 'Esta versión no incluye notas de cambios.');
   $('app-update-notice').hidden = false;
 }
 function setAppUpdateState(message: string, error = false) {
@@ -593,7 +596,7 @@ async function installAppUpdate() {
   if (button.getAttribute('aria-disabled') === 'true') return;
   button.setAttribute('aria-disabled', 'true');
   $('app-update-action-label').textContent = 'Descargando e instalando…';
-  setAppUpdateState('Descargando e instalando la actualización…');
+  setAppUpdateState('Descargando e instalando. No necesitas hacer nada más; la oficina se abrirá sola al terminar.');
   try {
     const result = await office.installAppUpdate();
     if (result.ok) {

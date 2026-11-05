@@ -25,7 +25,7 @@ export interface OfficeApi {
   rename(request: Rename): Promise<OfficeNames>;
   usage(): Promise<UsageResult>;
   version(): Promise<string>;
-  checkAppUpdate(): Promise<{ version: string; currentVersion: string } | null>;
+  checkAppUpdate(): Promise<{ version: string; currentVersion: string; notes: string } | null>;
   installAppUpdate(): Promise<{ ok: boolean; message: string }>;
   send(command: OfficeCommand): Promise<CommandResult>;
   focusSession(ref: AgentRef): Promise<FocusResult>;

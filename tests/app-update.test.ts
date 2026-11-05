@@ -49,7 +49,7 @@ test('reports only a newer stable release published on GitHub', async () => {
     return new Response(JSON.stringify(metadata()));
   });
   expect(requested).toEqual(['https://api.github.com/repos/Antonio-Fer-Gar/Oficina/releases/latest']);
-  expect(result).toEqual({ version: '0.1.7', currentVersion: '0.1.6' });
+  expect(result).toEqual({ version: '0.1.7', currentVersion: '0.1.6', notes: 'Instalador para Windows de 64 bits.' });
   expect(await checkAppUpdate('0.1.7', async () => new Response(JSON.stringify(metadata())))).toBeNull();
   expect(await checkAppUpdate('1.0.0', async () => new Response(JSON.stringify(metadata())))).toBeNull();
   expect(await checkAppUpdate('01.0.0', async () => new Response(JSON.stringify(metadata())))).toBeNull();
@@ -64,8 +64,17 @@ test('reports only a newer stable release published on GitHub', async () => {
     browser_download_url: 'https://github.com/Antonio-Fer-Gar/Oficina/releases/download/v0.10.0/Oficina.nter.Setup.0.10.0.exe',
   };
   expect(await checkAppUpdate('0.9.9', async () => new Response(JSON.stringify(numeric)))).toEqual({
-    version: '0.10.0', currentVersion: '0.9.9',
+    version: '0.10.0', currentVersion: '0.9.9', notes: 'Instalador para Windows de 64 bits.',
   });
+});
+
+test('shows release changes without installer details and handles missing notes', async () => {
+  const withNotes = { ...metadata(), body: 'Instalador para Windows.\n\n- Cambio **importante**.\n- Segunda mejora.\n\nSHA256: abc' };
+  expect((await checkAppUpdate('0.1.6', async () => new Response(JSON.stringify(withNotes))))?.notes)
+    .toBe('- Cambio **importante**.\n- Segunda mejora.');
+  const withoutNotes = { ...metadata(), body: null };
+  expect((await checkAppUpdate('0.1.6', async () => new Response(JSON.stringify(withoutNotes))))?.notes)
+    .toBe('Esta versión no incluye notas de cambios.');
 });
 
 test('rejects malformed, draft, prerelease, or unpublished release metadata', () => {
