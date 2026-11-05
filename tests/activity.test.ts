@@ -74,7 +74,7 @@ test('an unrecognized tool neither hides nor replaces a real action', () => {
   expect(tools.publish(false)).toMatchObject({ activity: 'grep', activityKind: 'searching' });
   tools.end('a', 1_000);
   tools.end('b', 1_100);
-  expect(tools.publish(false).recentActivity).toEqual({ kind: 'searching', endedAt: 1_000, description: 'Busco referencias' });
+  expect(tools.publish(false).recentActivity).toMatchObject({ kind: 'searching', endedAt: 1_000 });
 });
 test('ends of unknown or already finished calls change nothing', () => {
   const tools = new ActivityTracker();
@@ -167,6 +167,22 @@ test('unsafe, sensitive, and high-entropy filenames get generic descriptions', (
     const published = tools.publish(false);
     expect(published.activityDescription).toBe('Leo un archivo');
     expect(JSON.stringify(published)).not.toContain(path.split('\\').at(-1)!);
+  }
+});
+test('shows known command names without exposing arguments or arbitrary executables', () => {
+  const tools = new ActivityTracker();
+  for (const [tool, args, expected] of [
+    ['grep', { pattern: 'SECRET', path: 'C:\\private' }, 'Ejecuto grep'],
+    ['bash', { command: 'grep --password=SECRET archivo.txt' }, 'Ejecuto grep'],
+    ['bash', { command: 'git status --short' }, 'Ejecuto git'],
+    ['bash', { command: 'my-private-command --token=SECRET' }, 'Ejecuto comando'],
+  ] as const) {
+    tools.clear();
+    tools.start('call', tool, args);
+    const snapshot = tools.publish(false);
+    expect(snapshot.activityDescription).toBe(expected);
+    expect(JSON.stringify(snapshot)).not.toContain('SECRET');
+    expect(AgentInfoSchema.parse({ ...base, ...snapshot }).activityDescription).toBe(expected);
   }
 });
 

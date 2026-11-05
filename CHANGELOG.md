@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.13
+
+### Changed
+
+- Los bocadillos identifican comandos conocidos, como grep o git, sin mostrar sus argumentos.
+
+### Fixed
+
+- Los personajes vuelven a mover brazos y piernas al caminar aunque Windows reduzca las animaciones.
+
 ## 0.1.12
 
 ### Added

@@ -158,7 +158,8 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
       roomWidth = reduced.matches ? target.roomWidth : roomWidth + (target.roomWidth - roomWidth) * blend;
     }
     advanceZaps(now);
-    const limbFrame = (reduced.matches ? 0 : Math.floor((state?.time ?? now / 1000) * 6) % 2) as 0 | 1;
+    const walkingFrame = (Math.floor((state?.time ?? now / 1000) * 6) % 2) as 0 | 1;
+    const limbFrame = reduced.matches ? 0 : walkingFrame;
     const l = layout(), activityNow = Date.now();
     const activityRequests: ActivityBubbleRequest[] = [], activityContents = new Map<string, ActivityBubbleLayout>();
     const reservedAreas: SceneRect[] = [];
@@ -224,7 +225,7 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
           ? { kind: 'robot', role: root ? 'agent' : 'subagent', color: root ? appearance.robotColors?.agent : appearance.robotColors?.subagent }
           : root ? actor === mole ? { kind: 'mole' } : { kind: 'cat', coat: COATS[actor.order % COATS.length]! } : { kind: 'mouse' },
           root ? appearance.outfits.cat : appearance.outfits.mouse, pose,
-          { walking: actor.moving, frame: limbFrame, activity, dragging, focus, zap: zapMotion?.zap, zapSide: zapMotion?.zapSide });
+          { walking: actor.moving, frame: actor.moving ? walkingFrame : limbFrame, activity, dragging, focus, zap: zapMotion?.zap, zapSide: zapMotion?.zapSide });
         if (activity !== 'none' && !zapMotion) painter.activityProp(0, bob, activity, pose === 'sit', state.time, reduced.matches);
         context.restore();
         painter.modelBadge(0, root ? -42 + bob : -26 + bob * characterScale, actor.info.model);
@@ -293,7 +294,7 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
       const position = toScreen(l, messenger);
       context.save(); context.translate(position.x / l.unit, position.y / l.unit); context.scale(l.scale, l.scale);
       painter.character(0, 0, appearance.theme === 'robots' ? { kind: 'robot', role: 'agent', color: appearance.robotColors?.agent } : { kind: 'cat', coat: '#3f3a40' }, 'messenger', 'stand',
-        { walking: !messenger.arrived, frame: limbFrame });
+        { walking: !messenger.arrived, frame: messenger.arrived ? limbFrame : walkingFrame });
       if (messenger.arrived) painter.bubble(2, -24, '✉', '#7d6a3c');
       painter.text('MENSAJERO', -18, 43);
       context.restore();

@@ -26,6 +26,11 @@ const SAFE_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const SAFE_SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
 const SENSITIVE_FILE_NAME = /(?:secret|credential|password|passwd|passphrase|token|api[-_.]?key|access[-_.]?key|private|clav(?:e|es)|llaves?|(?:^|[._-])(?:env|id[_-]?rsa|id[_-]?ed25519|ssh|auth|cookie|session|vault|wallet|keychain|key|keys|cert|certificate)(?:$|[._-]))/i;
 const SENSITIVE_FILE_EXTENSION = /\.(?:pem|key|p12|pfx|crt|cer|der|jks|keystore|pub|p8|p7b|p7c|p7m|p7s|asc)$/i;
+const SAFE_COMMANDS: Record<string, true> = {
+  grep: true, rg: true, git: true, bun: true, npm: true, pnpm: true, yarn: true, node: true,
+  python: true, python3: true, cargo: true, go: true, curl: true, find: true, ls: true, cat: true,
+  sed: true, awk: true, powershell: true, pwsh: true, docker: true, make: true, tsc: true,
+};
 const SAFE_DESCRIPTIONS: Record<string, true> = {
   'Leo un archivo': true, 'Consulto la web': true, 'Busco en la web': true, 'Busco archivos': true, 'Busco referencias': true,
   'Escribo un archivo': true, 'Edito un archivo': true, 'Edito código': true, 'Depuro código': true, 'Ejecuto pruebas': true,
@@ -75,6 +80,7 @@ function skillNameFromPath(path: string): string | undefined {
 }
 function safeDescription(value: string): boolean {
   if (Object.hasOwn(SAFE_DESCRIPTIONS, value)) return true;
+  if (value.startsWith('Ejecuto ')) return Object.hasOwn(SAFE_COMMANDS, value.slice('Ejecuto '.length));
   const skillPrefix = 'Consulto skill: ';
   if (value.startsWith(skillPrefix)) return safeSkillName(value.slice(skillPrefix.length)) !== undefined;
   for (const prefix of ['Leo ', 'Escribo ', 'Edito ']) {
@@ -116,6 +122,7 @@ function describeTool(toolName: string, args: unknown, kind = classifyTool(toolN
     if (/^skill:\/\//i.test(path) || /(?:^|[/\\])skills?[/\\][^/\\]+[/\\]skill\.md$/i.test(path)) return 'Leo un archivo';
     return file ? `Leo ${file}` : 'Leo un archivo';
   }
+  if (name === 'grep') return 'Ejecuto grep';
   if (kind === 'searching') {
     if (name === 'web_search' || name === 'browser') return 'Busco en la web';
     return name === 'glob' || name === 'find' ? 'Busco archivos' : 'Busco referencias';
@@ -133,7 +140,13 @@ function describeTool(toolName: string, args: unknown, kind = classifyTool(toolN
   }
   if (kind === 'executing') {
     if (name === 'debug') return 'Depuro código';
-    return isTestCommand(args) ? 'Ejecuto pruebas' : 'Ejecuto comando';
+    if (isTestCommand(args)) return 'Ejecuto pruebas';
+    if (name === 'bash') {
+      const command = argsRecord(args)?.command;
+      const executable = typeof command === 'string' ? /^\s*([a-z][a-z0-9-]*)(?=\s|$)/i.exec(command)?.[1]?.toLowerCase() : undefined;
+      if (executable && Object.hasOwn(SAFE_COMMANDS, executable)) return `Ejecuto ${executable}`;
+    }
+    return 'Ejecuto comando';
   }
   return kind === 'coordinating' ? 'Coordino subagentes' : '';
 }
