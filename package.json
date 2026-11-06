@@ -1,6 +1,6 @@
 {
   "name": "nter-omp-office",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Oficina pixel-art que muestra y controla las sesiones de omp",
   "author": "nter",
   "private": true,
@@ -30,11 +30,28 @@
   "build": {
     "appId": "es.nter.oficina-omp",
     "productName": "Oficina nter",
-    "directories": { "output": "release" },
+    "directories": {
+      "output": "release"
+    },
     "files": ["dist/**", "assets/**", "package.json"],
     "asarUnpack": ["dist/worker.js", "dist/terminal-launcher.js", "dist/app-update-helper.js"],
-    "extraResources": [{ "from": ".superpowers/tools/bun-windows-x64/bun.exe", "to": "bun/bun.exe" }],
-    "win": { "target": ["nsis", "dir"], "icon": "assets/nter-logo.ico" },
-    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "include": "build/installer.nsh" }
+    "extraResources": [{
+      "from": ".superpowers/tools/bun-windows-x64/bun.exe",
+      "to": "bun/bun.exe"
+    }],
+    "win": {
+      "target": ["nsis", "dir"],
+      "icon": "assets/nter-logo.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh"
+    }
+  },
+  "dependencies": {
+    "adm-zip": "0.6.1",
+    "puppeteer-core": "25.3.0"
   }
 }

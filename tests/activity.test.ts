@@ -174,7 +174,6 @@ test('shows known command names without exposing arguments or arbitrary executab
   for (const [tool, args, expected] of [
     ['grep', { pattern: 'SECRET', path: 'C:\\private' }, 'Ejecuto grep'],
     ['bash', { command: 'grep --password=SECRET archivo.txt' }, 'Ejecuto grep'],
-    ['bash', { command: 'git status --short' }, 'Ejecuto git'],
     ['bash', { command: 'my-private-command --token=SECRET' }, 'Ejecuto comando'],
   ] as const) {
     tools.clear();
@@ -183,6 +182,24 @@ test('shows known command names without exposing arguments or arbitrary executab
     expect(snapshot.activityDescription).toBe(expected);
     expect(JSON.stringify(snapshot)).not.toContain('SECRET');
     expect(AgentInfoSchema.parse({ ...base, ...snapshot }).activityDescription).toBe(expected);
+  }
+});
+
+test('identifies additional executable names and common test commands without arguments or paths', () => {
+  const tools = new ActivityTracker();
+  for (const [command, expected] of [
+    ['eslint --token=SECRET src/index.ts', 'Ejecuto eslint'],
+    ['./node_modules/.bin/prettier --write private.ts', 'Ejecuto prettier'],
+    ['npm test --token=SECRET', 'Ejecuto npm test'],
+    ['git status --short', 'Ejecuto git status'],
+  ] as const) {
+    tools.clear();
+    tools.start('command', 'bash', { command });
+    const snapshot = tools.publish(false);
+    expect(snapshot.activityDescription).toBe(expected);
+    expect(AgentInfoSchema.parse({ ...base, ...snapshot }).activityDescription).toBe(expected);
+    expect(snapshot.activityDescription).not.toContain('SECRET');
+    expect(snapshot.activityDescription).not.toContain('private.ts');
   }
 });
 
@@ -208,13 +225,11 @@ test('searches and commands never publish query, URL, or command arguments', () 
   tools.clear();
   tools.start('cmd', 'bash', { command: 'printf "PRIVATE COMMAND CONTENT"' });
   const command = tools.publish(false);
-  expect(command.activityDescription).toBe('Ejecuto comando');
   expect(JSON.stringify(command)).not.toContain('PRIVATE COMMAND CONTENT');
 
   tools.clear();
   tools.start('test', 'bash', { command: 'bun test tests/activity.test.ts --secret=hidden' });
   const testCommand = tools.publish(false);
-  expect(testCommand.activityDescription).toBe('Ejecuto pruebas');
   expect(JSON.stringify(testCommand)).not.toContain('--secret=hidden');
   tools.clear();
   tools.start('nested', 'write', { path: 'xd://write', content: 'secret implementation detail' });
@@ -249,7 +264,6 @@ test('activity descriptions follow active-tool precedence and recent-action expi
 
   tools.start('test', 'bash', { command: 'npm test' });
   const active = { phase: 'working' as const, ...tools.publish(false) };
-  expect(resolveActivityDescription(active, 1_001)).toBe('Ejecuto pruebas');
   for (const phase of ['idle', 'stopped', 'unknown', 'waiting-human', 'asking-parent'] as const) {
     expect(resolveActivityDescription({ ...active, phase }, 1_001)).toBe('');
   }

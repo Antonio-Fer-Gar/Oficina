@@ -26,11 +26,6 @@ const SAFE_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const SAFE_SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
 const SENSITIVE_FILE_NAME = /(?:secret|credential|password|passwd|passphrase|token|api[-_.]?key|access[-_.]?key|private|clav(?:e|es)|llaves?|(?:^|[._-])(?:env|id[_-]?rsa|id[_-]?ed25519|ssh|auth|cookie|session|vault|wallet|keychain|key|keys|cert|certificate)(?:$|[._-]))/i;
 const SENSITIVE_FILE_EXTENSION = /\.(?:pem|key|p12|pfx|crt|cer|der|jks|keystore|pub|p8|p7b|p7c|p7m|p7s|asc)$/i;
-const SAFE_COMMANDS: Record<string, true> = {
-  grep: true, rg: true, git: true, bun: true, npm: true, pnpm: true, yarn: true, node: true,
-  python: true, python3: true, cargo: true, go: true, curl: true, find: true, ls: true, cat: true,
-  sed: true, awk: true, powershell: true, pwsh: true, docker: true, make: true, tsc: true,
-};
 const SAFE_DESCRIPTIONS: Record<string, true> = {
   'Leo un archivo': true, 'Consulto la web': true, 'Busco en la web': true, 'Busco archivos': true, 'Busco referencias': true,
   'Escribo un archivo': true, 'Edito un archivo': true, 'Edito código': true, 'Depuro código': true, 'Ejecuto pruebas': true,
@@ -80,7 +75,10 @@ function skillNameFromPath(path: string): string | undefined {
 }
 function safeDescription(value: string): boolean {
   if (Object.hasOwn(SAFE_DESCRIPTIONS, value)) return true;
-  if (value.startsWith('Ejecuto ')) return Object.hasOwn(SAFE_COMMANDS, value.slice('Ejecuto '.length));
+  if (value.startsWith('Ejecuto ')) {
+    const match = /^(\S+)(?: (test|status|diff|log|show))?$/.exec(value.slice('Ejecuto '.length));
+    return !!match && safeCommandName(match[1]!) === match[1];
+  }
   const skillPrefix = 'Consulto skill: ';
   if (value.startsWith(skillPrefix)) return safeSkillName(value.slice(skillPrefix.length)) !== undefined;
   for (const prefix of ['Leo ', 'Escribo ', 'Edito ']) {
@@ -102,10 +100,8 @@ function describedFileName(args: unknown): string | undefined {
   const header = /^\[([^\]\r\n]+)#[0-9a-f]{4}\](?:\r?\n|$)/i.exec(input);
   return header ? safeFileName(header[1]!) : undefined;
 }
-function isTestCommand(args: unknown): boolean {
-  const command = argsRecord(args)?.command;
-  if (typeof command !== 'string' || command.length > 4096) return false;
-  return /^\s*(?:(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?(?:test|tests)(?:\s|$)|(?:pytest|jest)(?:\s|$)|(?:cargo|go)\s+test(?:\s|$)|node\s+--test(?:\s|$)|vitest\s+(?:run|watch)(?:\s|$))/i.test(command);
+function safeCommandName(name: string): string | undefined {
+  return /^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(name) && safeFileName(name) === name ? name : undefined;
 }
 function describeTool(toolName: string, args: unknown, kind = classifyTool(toolName, args)): string {
   const name = normalizedToolName(toolName), path = toolPath(args);
@@ -140,11 +136,17 @@ function describeTool(toolName: string, args: unknown, kind = classifyTool(toolN
   }
   if (kind === 'executing') {
     if (name === 'debug') return 'Depuro código';
-    if (isTestCommand(args)) return 'Ejecuto pruebas';
     if (name === 'bash') {
       const command = argsRecord(args)?.command;
-      const executable = typeof command === 'string' ? /^\s*([a-z][a-z0-9-]*)(?=\s|$)/i.exec(command)?.[1]?.toLowerCase() : undefined;
-      if (executable && Object.hasOwn(SAFE_COMMANDS, executable)) return `Ejecuto ${executable}`;
+      const match = typeof command === 'string' ? /^\s*(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^\s;&|<>]+))(?=\s|$|[;&|<>])/.exec(command) : null;
+      const executable = (match?.[1] ?? match?.[2] ?? match?.[3] ?? '').split(/[/\\]/).at(-1) ?? '';
+      const safe = safeCommandName(executable);
+      if (safe && typeof command === 'string' && match) {
+        const rest = command.slice(match[0].length);
+        const test = /^(?:bun|npm|pnpm|yarn|cargo|go)$/i.test(safe) && /^\s+(?:run\s+)?test(?:\s|$)/i.test(rest);
+        const gitAction = /^git$/i.test(safe) ? /^\s+(status|diff|log|show)(?=\s|$)/i.exec(rest)?.[1]?.toLowerCase() : undefined;
+        return `Ejecuto ${safe}${test ? ' test' : gitAction ? ` ${gitAction}` : ''}`;
+      }
     }
     return 'Ejecuto comando';
   }

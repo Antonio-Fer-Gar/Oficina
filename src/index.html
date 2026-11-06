@@ -96,11 +96,25 @@
     <header><strong id="skills-title">Skills globales</strong><button id="skills-close" type="button" aria-label="Cerrar skills">×</button></header>
     <p>Las skills activadas estarán disponibles en cualquier proyecto y omp recibirá la instrucción de leerlas al empezar cada tarea. El agente decide cómo aplicarlas. Inicia una sesión nueva para aplicar los cambios.</p>
     <p>Adjunta solo skills de confianza: pueden contener instrucciones y scripts. La oficina no ejecuta esos scripts.</p>
+    <section aria-labelledby="catalog-title">
+      <strong id="catalog-title">Catálogo de skills Nter</strong>
+      <p class="hint">Carga el catálogo con un Chrome dedicado. La primera vez tendrás que iniciar sesión en la ventana que se abrirá.</p>
+      <button id="catalog-load" type="button">Cargar catálogo Nter</button>
+      <label for="catalog-search">Buscar por nombre, categoría o descripción</label>
+      <input id="catalog-search" type="search" autocomplete="off">
+      <p id="catalog-status" class="hint" role="status" aria-live="polite"></p>
+      <ul id="catalog-list" class="skills-list"></ul>
+    </section>
     <button id="skills-import" type="button">Seleccionar carpeta</button>
     <button id="skills-import-file" type="button">Adjuntar archivo SKILL.md</button>
-    <p class="hint">La carpeta incluye todos sus recursos; al seleccionar SKILL.md se adjunta solo ese archivo.</p>
+    <p class="hint">El selector de carpetas de Windows solo muestra carpetas, no archivos. Elige la carpeta de la skill o la carpeta descargada que la contiene; se copiarán sus recursos. Para elegir el archivo visible, usa «Adjuntar archivo SKILL.md» (solo se copiará ese archivo).</p>
     <p id="skills-status" class="hint" role="status" aria-live="polite"></p>
+    <strong>Adjuntadas desde la oficina</strong>
     <ul id="skills-list" class="skills-list"></ul>
+    <strong>Otras skills globales disponibles en omp</strong>
+    <p class="hint">Estas skills están instaladas fuera de la oficina. Se muestran sin modificar su instalación; las excluidas por la configuración de omp no aparecen.</p>
+    <p id="installed-skills-status" class="hint" role="status"></p>
+    <ul id="installed-skills-list" class="skills-list"></ul>
   </section>
   <section id="setup" class="panel setup" hidden>
     <header><strong id="setup-title">Ajustes</strong><button id="setup-close" type="button" aria-label="Cerrar ajustes">×</button></header>

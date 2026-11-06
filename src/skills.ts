@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 
 export interface ManagedSkill { id: string; name: string; description: string; enabled: boolean }
+export interface InstalledSkill { name: string; description: string; source: string; manual: boolean }
 
 const marker = '.office-managed-skill';
 const safeName = /^(?!.*--)[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -131,26 +133,69 @@ function rulePath(rules: string, id: string): string {
 export async function listManagedSkills(home: string, dataDir: string): Promise<ManagedSkill[]> {
   return locked(home, dataDir, async ({ store }) => records(store));
 }
+export function parseInstalledSkills(value: unknown, home: string, managed: ManagedSkill[]): InstalledSkill[] {
+  if (!value || typeof value !== 'object' || !('skills' in value) || !Array.isArray(value.skills)) {
+    throw new Error('omp devolvió un listado de skills no válido.');
+  }
+  const managedPaths = new Set(managed.filter(skill => skill.enabled).map(skill => resolve(home, '.agents', 'skills', skill.name, 'SKILL.md').toLowerCase()));
+  return value.skills.flatMap((item: unknown): InstalledSkill[] => {
+    if (!item || typeof item !== 'object') return [];
+    const skill = item as Record<string, unknown>;
+    if (typeof skill.name !== 'string' || typeof skill.description !== 'string' || typeof skill.source !== 'string'
+      || typeof skill.filePath !== 'string' || !skill.source.endsWith(':user')
+      || managedPaths.has(resolve(skill.filePath).toLowerCase())) return [];
+    return [{ name: skill.name, description: skill.description, source: skill.source, manual: skill.hide === true }];
+  });
+}
 
-export async function importManagedSkill(home: string, dataDir: string, sourceDir: string): Promise<ManagedSkill[]> {
+export async function listInstalledSkills(home: string, dataDir: string): Promise<InstalledSkill[]> {
+  const managed = await listManagedSkills(home, dataDir);
+  const executable = join(process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local'), 'omp', 'omp.exe');
+  const output = await new Promise<string>((resolveOutput, reject) => {
+    execFile(executable, ['skill', 'list', dataDir, '--json'], { cwd: dataDir, windowsHide: true, timeout: 20_000, maxBuffer: 5 * 1024 * 1024 },
+      (error, stdout) => error ? reject(new Error('No se pudo consultar el listado de skills de omp.')) : resolveOutput(stdout));
+  });
+  let value: unknown;
+  try { value = JSON.parse(output); } catch { throw new Error('omp devolvió un listado de skills no válido.'); }
+  return parseInstalledSkills(value, home, managed);
+}
+
+
+export async function importManagedSkill(home: string, dataDir: string, sourceDir: string, expectedName?: string): Promise<ManagedSkill[]> {
   return locked(home, dataDir, async ({ store, active, rules }) => {
     const sourceStat = await lstat(sourceDir);
     const singleFile = sourceStat.isFile() && basename(sourceDir) === 'SKILL.md';
     if (sourceStat.isSymbolicLink() || (!sourceStat.isDirectory() && !singleFile)) throw new Error('Seleccione una carpeta o un SKILL.md válido');
-    const skillPath = singleFile ? sourceDir : join(sourceDir, 'SKILL.md');
+    let skillDir = sourceDir;
+    if (!singleFile && !await exists(join(skillDir, 'SKILL.md'))) {
+      const candidates: string[] = [];
+      for (const entry of await readdir(skillDir, { withFileTypes: true })) {
+        if (entry.isDirectory() && await exists(join(skillDir, entry.name, 'SKILL.md'))) candidates.push(join(skillDir, entry.name));
+      }
+      if (candidates.length > 1) throw new Error('La carpeta contiene varias skills. Selecciona la carpeta de una sola skill.');
+      if (!candidates.length) throw new Error('No se encontró SKILL.md en la carpeta seleccionada ni en sus subcarpetas inmediatas.');
+      skillDir = candidates[0]!;
+    }
+    const skillPath = singleFile ? sourceDir : join(skillDir, 'SKILL.md');
+    if (!await exists(skillPath)) throw new Error('No se encontró SKILL.md en la carpeta seleccionada.');
     const skillFile = await lstat(skillPath);
     if (!skillFile.isFile() || skillFile.isSymbolicLink()) throw new Error('Seleccione una carpeta con SKILL.md válido');
     const info = metadata(await readFile(skillPath, 'utf8'));
+    if (expectedName !== undefined && info.name !== expectedName) throw new Error('El nombre de la skill descargada no coincide con el catálogo.');
     const id = randomUUID(), recordDir = join(store, id), destination = join(active, info.name);
     if ((await records(store)).some(skill => skill.name === info.name)) throw new Error('La skill ya está adjuntada');
+    if (await exists(destination)) throw new Error(`Ya existe una skill llamada "${info.name}". No se ha sobrescrito; revisa la skill instalada.`);
     await mkdir(recordDir);
     let reserved = false, ruleCreated = false;
     try {
       // Reserve the global name atomically; copyTree must not overwrite any existing entry.
-      await mkdir(destination);
+      try { await mkdir(destination); } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error(`Ya existe una skill llamada "${info.name}". No se ha sobrescrito; revisa la skill instalada.`);
+        throw error;
+      }
       reserved = true;
       if (singleFile) await copyTree(skillPath, join(destination, 'SKILL.md'));
-      else for (const entry of await readdir(sourceDir)) await copyTree(join(sourceDir, entry), join(destination, entry));
+      else for (const entry of await readdir(skillDir)) await copyTree(join(skillDir, entry), join(destination, entry));
       await writeFile(join(destination, marker), id, { flag: 'wx' });
       await writeFile(rulePath(rules, id), ruleBody(info.name), { flag: 'wx' });
       ruleCreated = true;

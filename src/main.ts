@@ -15,12 +15,16 @@ import { OfficeNamesSchema, RenameSchema, catNameKey, projectNameKey, type Offic
 import { fetchUsage } from './usage.ts';
 import { conversationAction } from './resume.ts';
 import { checkAppUpdate, downloadInstaller, latestAppUpdate, type DownloadedUpdate } from './app-update.ts';
-import { importManagedSkill, listManagedSkills, setManagedSkillEnabled } from './skills.ts';
+import { importManagedSkill, listInstalledSkills, listManagedSkills, setManagedSkillEnabled } from './skills.ts';
+import { CatalogBrowser, type CatalogSkill } from './catalog-browser.ts';
+import { extractCatalogZip } from './catalog-archive.ts';
 import { z } from 'zod';
 
 const dataDir = process.env.NTER_OFFICE_DATA ?? join(process.env.LOCALAPPDATA ?? homedir(), 'nter-omp-office');
 const preferencesFile = join(dataDir, 'preferences.json');
 const root = app.getAppPath();
+const catalog = new CatalogBrowser(dataDir);
+let catalogSkills: CatalogSkill[] = [];
 let window: BrowserWindow | null = null;
 let worker: ChildProcessWithoutNullStreams | null = null;
 let latest: { agents: AgentInfo[]; complete: boolean } = { agents: [], complete: false };
@@ -216,6 +220,7 @@ ipcMain.handle('office:show-folder', async (_event, profile: unknown, sessionId:
 });
 ipcMain.handle('office:muted', () => preferences().muted);
 ipcMain.handle('office:skills-list', () => listManagedSkills(homedir(), dataDir));
+ipcMain.handle('office:skills-installed', () => listInstalledSkills(homedir(), dataDir));
 ipcMain.handle('office:skills-import', async (_event, input: unknown) => {
   const kind = z.enum(['folder', 'file']).parse(input);
   const options: Electron.OpenDialogOptions = kind === 'folder'
@@ -227,6 +232,25 @@ ipcMain.handle('office:skills-import', async (_event, input: unknown) => {
 });
 ipcMain.handle('office:skills-set-enabled', (_event, id: unknown, enabled: unknown) =>
   setManagedSkillEnabled(homedir(), dataDir, z.string().parse(id), z.boolean().parse(enabled)));
+ipcMain.handle('office:catalog-list', async () => {
+  const skills = await catalog.list();
+  catalogSkills = skills;
+  return skills;
+});
+ipcMain.handle('office:catalog-install', async (_event, inputName: unknown, inputVersion: unknown) => {
+  const name = z.string().min(1).max(64).parse(inputName);
+  const version = z.string().min(1).max(128).parse(inputVersion);
+  if (!catalogSkills.some(skill => skill.name === name && skill.version === version)) {
+    throw new Error('La skill ya no está en el catálogo cargado. Actualiza la lista.');
+  }
+  const archive = await catalog.download(name, version);
+  const extracted = await extractCatalogZip(archive.base64);
+  try {
+    return await importManagedSkill(homedir(), dataDir, extracted.directory, name);
+  } finally {
+    await extracted.cleanup();
+  }
+});
 const bridgePlan = () => planBridgeInstall({ source: join(root, 'dist', 'extension.js'), profile: 'default' });
 ipcMain.handle('office:bridge-status', () => bridgePlan().action);
 ipcMain.handle('office:bridge-install', () => {
@@ -408,6 +432,7 @@ else {
   });
   app.on('before-quit', () => {
     quitting = true;
+    void catalog.close();
     if (updateExitTimer) { clearTimeout(updateExitTimer); updateExitTimer = null; }
     if (installingUpdate) {
       if (!updateSignalSent) { updateSignalSent = true; updateHelper?.stdin.end('INSTALL\n'); }

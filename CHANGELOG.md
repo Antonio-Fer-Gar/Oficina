@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.14
+
+### Added
+
+- El panel de skills muestra las skills globales que omp descubre, incluidas las instaladas fuera de la oficina.
+- Búsqueda e instalación de skills del catálogo Nter desde el panel, con sesión de Chrome separada e importación manual conservada.
+
+### Changed
+
+- Los bocadillos identifican más programas y algunos subcomandos, sin mostrar argumentos ni rutas.
+
+### Fixed
+
+- La importación acepta carpetas descargadas con una skill en su interior y explica los conflictos o las carpetas sin `SKILL.md`.
+
 ## 0.1.13
 
 ### Changed

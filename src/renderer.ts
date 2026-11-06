@@ -10,6 +10,7 @@ import {
 import { agentKey, createOffice, isWorking, syncOffice, type Actor, type Project } from './state.ts';
 import { actorName, catNameKey, moleActor, projectName, type OfficeNames } from './office/names.ts';
 import type { ManagedSkill } from './skills.ts';
+import type { CatalogSkill } from './catalog-browser.ts';
 
 declare global { interface Window { office: OfficeApi } }
 const office = window.office;
@@ -585,6 +586,53 @@ $('history-button').onclick = () => void openHistory();
 $('history-close').onclick = () => { $('history').hidden = true; };
 
 let managedSkills: ManagedSkill[] = [], skillsBusy = false;
+let catalogSkills: CatalogSkill[] = [];
+let catalogLoaded = false, catalogLoading = false;
+function renderCatalog() {
+  const list = $('catalog-list'), status = $('catalog-status');
+  list.replaceChildren();
+  $<HTMLButtonElement>('catalog-load').disabled = catalogLoading;
+  if (catalogLoading || !catalogLoaded) return;
+  const query = $<HTMLInputElement>('catalog-search').value.trim().toLocaleLowerCase();
+  const matches = catalogSkills.filter(skill =>
+    [skill.name, skill.category, skill.description].some(value => value.toLocaleLowerCase().includes(query)));
+  status.classList.remove('error');
+  status.textContent = matches.length ? `${matches.length} skills encontradas.` : 'No hay resultados en el catálogo.';
+  for (const skill of matches) {
+    const item = document.createElement('li'), title = document.createElement('strong');
+    const details = document.createElement('p'), description = document.createElement('p');
+    const install = document.createElement('button');
+    title.textContent = skill.name;
+    details.className = 'hint'; details.textContent = `${skill.category} · Versión ${skill.version}`;
+    description.className = 'hint'; description.textContent = skill.description;
+    install.type = 'button'; install.textContent = 'Instalar'; install.disabled = skillsBusy;
+    install.setAttribute('aria-label', `Instalar ${skill.name}, versión ${skill.version}`);
+    install.onclick = () => {
+      void runSkills(() => office.installCatalogSkill(skill.name, skill.version),
+        'Instalando skill del catálogo…', 'Skill del catálogo adjuntada.');
+    };
+    item.append(title, details, description, install); list.append(item);
+  }
+}
+async function loadCatalog() {
+  if (catalogLoading) return;
+  catalogLoading = true; catalogLoaded = false;
+  const status = $('catalog-status');
+  status.classList.remove('error'); status.textContent = 'Cargando catálogo Nter…';
+  renderCatalog();
+  try {
+    catalogSkills = await office.listCatalogSkills();
+    catalogLoaded = true;
+  } catch (error) {
+    status.classList.add('error');
+    const message = error instanceof Error ? error.message : String(error);
+    status.textContent = `No se pudo cargar el catálogo: ${message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')}`;
+  } finally {
+    catalogLoading = false; renderCatalog();
+  }
+}
+$('catalog-load').onclick = () => void loadCatalog();
+$<HTMLInputElement>('catalog-search').oninput = renderCatalog;
 function renderSkills() {
   const list = $('skills-list'); list.replaceChildren();
   for (const skill of managedSkills) {
@@ -604,7 +652,38 @@ function renderSkills() {
   }
   $<HTMLButtonElement>('skills-import').disabled = skillsBusy;
   $<HTMLButtonElement>('skills-import-file').disabled = skillsBusy;
+  renderCatalog();
 }
+let installedSkillsRequest = 0;
+async function refreshInstalledSkills() {
+  const request = ++installedSkillsRequest, status = $('installed-skills-status'), list = $('installed-skills-list');
+  status.classList.remove('error'); status.textContent = 'Consultando skills de omp…';
+  try {
+    const skills = await office.skillsInstalled();
+    if (request !== installedSkillsRequest) return;
+    list.replaceChildren();
+    for (const skill of skills) {
+      const item = document.createElement('li'), name = document.createElement('strong');
+      name.textContent = skill.name; item.append(name);
+      if (skill.manual) {
+        const manual = document.createElement('span');
+        manual.textContent = ' · Solo invocación manual'; item.append(manual);
+      }
+      if (skill.description) {
+        const description = document.createElement('p');
+        description.className = 'hint'; description.textContent = skill.description; item.append(description);
+      }
+      list.append(item);
+    }
+    status.textContent = skills.length ? `${skills.length} skills disponibles.` : 'No hay otras skills globales disponibles.';
+  } catch (error) {
+    if (request !== installedSkillsRequest) return;
+    list.replaceChildren(); status.classList.add('error');
+    const message = error instanceof Error ? error.message : String(error);
+    status.textContent = `No se pudieron consultar las skills de omp: ${message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')}`;
+  }
+}
+
 async function runSkills(action: () => Promise<ManagedSkill[] | null>, loading: string, success: string) {
   if (skillsBusy) return;
   skillsBusy = true; renderSkills();
@@ -616,10 +695,12 @@ async function runSkills(action: () => Promise<ManagedSkill[] | null>, loading: 
     else {
       managedSkills = result;
       status.textContent = managedSkills.length ? success : `${success} No hay skills adjuntadas.`;
+      void refreshInstalledSkills();
     }
   } catch (error) {
     status.classList.add('error');
-    status.textContent = `No se pudo completar la operación: ${error instanceof Error ? error.message : String(error)}`;
+    const message = error instanceof Error ? error.message : String(error);
+    status.textContent = `No se pudo completar la operación: ${message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')}`;
   } finally {
     skillsBusy = false; renderSkills();
   }
