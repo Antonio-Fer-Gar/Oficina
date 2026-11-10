@@ -1,5 +1,14 @@
 # Backlog
 
+## Completado en los cambios actuales
+
+- [x] Quitar el mensajero que aparece al abrir la aplicación para traer el historial.
+- [x] Al instalar la oficina, instalar también omp si todavía no está instalado.
+- [x] Abrir y leer conversaciones desde la oficina; las sesiones cerradas se reanudan en consola para evitar duplicar escritores.
+- [x] Actualizar omp automáticamente, sin aviso, con opción para desactivarlo en Ajustes. Se pospone mientras haya procesos de omp o no se pueda verificar el origen de la instalación.
+- [x] Mejorar la legibilidad de la ventana para leer la conversación y escribir mensajes al agente.
+- [x] Adaptar correctamente toda la oficina cuando la ventana esté maximizada.
+
 ## Bocadillos de actividad para agentes y subagentes
 
 **Estado:** completado; las sesiones ya abiertas cargarán el puente actualizado cuando se reinicien.

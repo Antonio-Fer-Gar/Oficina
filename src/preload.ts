@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { AgentInfo, AgentRef, CommandResult, OfficeCommand } from './bridge/protocol.ts';
 import type { ConversationRecord } from './conversation.ts';
+import type { ConversationMessage } from './conversation-view.ts';
 import type { FocusResult } from './terminal.ts';
 import type { Appearance } from './office/appearance.ts';
 import type { OfficeNames, Rename } from './office/names.ts';
@@ -12,7 +13,6 @@ export interface OfficeUpdate { agents: AgentInfo[]; complete: boolean }
 export interface OfficeApi {
   snapshot(): Promise<OfficeUpdate>;
   subscribe(listener: (update: OfficeUpdate) => void): () => void;
-  onBriefing(listener: (id: string) => void): () => void;
   onVisibility(listener: (visible: boolean) => void): () => void;
   bridgeStatus(): Promise<'install' | 'update' | 'unchanged' | 'refuse' | 'remove' | 'absent'>;
   installBridge(): Promise<{ ok: boolean; message: string }>;
@@ -20,6 +20,8 @@ export interface OfficeApi {
   setAppearance(appearance: Appearance): Promise<void>;
   tokenSaving(): Promise<boolean>;
   setTokenSaving(enabled: boolean): Promise<void>;
+  ompAutoUpdate(): Promise<boolean>;
+  setOmpAutoUpdate(enabled: boolean): Promise<void>;
   restoreBounds(): void;
   alwaysOnTop(): Promise<boolean>;
   setAlwaysOnTop(alwaysOnTop: boolean): void;
@@ -38,9 +40,12 @@ export interface OfficeApi {
   send(command: OfficeCommand): Promise<CommandResult>;
   focusSession(ref: AgentRef): Promise<FocusResult>;
   history(): Promise<ConversationRecord[]>;
+  readConversation(profile: string, sessionId: string): Promise<ConversationMessage[]>;
   openConversation(profile: string, sessionId: string): Promise<string | null>;
+  maximized(): Promise<boolean>;
+  onMaximized(listener: (maximized: boolean) => void): () => void;
+  toggleMaximize(): void;
   showFolder(profile: string, sessionId: string): Promise<string | null>;
-  acknowledgeBriefing(id: string): Promise<boolean>;
   minimize(): void;
   close(): void;
   muted(): Promise<boolean>;
@@ -54,7 +59,6 @@ function listen<T>(channel: string, listener: (value: T) => void) {
 const api: OfficeApi = {
   snapshot: () => ipcRenderer.invoke('office:snapshot'),
   subscribe: listener => listen('office:agents', listener),
-  onBriefing: listener => listen('office:briefing', listener),
   onVisibility: listener => listen('office:visibility', listener),
   bridgeStatus: () => ipcRenderer.invoke('office:bridge-status'),
   installBridge: () => ipcRenderer.invoke('office:bridge-install'),
@@ -62,6 +66,8 @@ const api: OfficeApi = {
   setAppearance: appearance => ipcRenderer.invoke('office:set-appearance', appearance),
   tokenSaving: () => ipcRenderer.invoke('office:token-saving'),
   setTokenSaving: enabled => ipcRenderer.invoke('office:set-token-saving', enabled),
+  ompAutoUpdate: () => ipcRenderer.invoke('office:omp-auto-update'),
+  setOmpAutoUpdate: enabled => ipcRenderer.invoke('office:set-omp-auto-update', enabled),
   restoreBounds: () => ipcRenderer.send('office:restore-bounds'),
   alwaysOnTop: () => ipcRenderer.invoke('office:always-on-top'),
   setAlwaysOnTop: alwaysOnTop => ipcRenderer.send('office:set-always-on-top', alwaysOnTop),
@@ -80,9 +86,12 @@ const api: OfficeApi = {
   send: command => ipcRenderer.invoke('office:send', command),
   focusSession: ref => ipcRenderer.invoke('office:focus', ref),
   history: () => ipcRenderer.invoke('office:history'),
+  readConversation: (profile, sessionId) => ipcRenderer.invoke('office:read-conversation', profile, sessionId),
   openConversation: (profile, sessionId) => ipcRenderer.invoke('office:open-conversation', profile, sessionId),
+  maximized: () => ipcRenderer.invoke('office:maximized'),
+  onMaximized: listener => listen('office:maximized', listener),
+  toggleMaximize: () => ipcRenderer.send('office:toggle-maximize'),
   showFolder: (profile, sessionId) => ipcRenderer.invoke('office:show-folder', profile, sessionId),
-  acknowledgeBriefing: id => ipcRenderer.invoke('office:briefed', id),
   minimize: () => ipcRenderer.send('office:minimize'),
   close: () => ipcRenderer.send('office:close'),
   muted: () => ipcRenderer.invoke('office:muted'),

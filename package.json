@@ -1,6 +1,6 @@
 {
   "name": "nter-omp-office",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Oficina pixel-art que muestra y controla las sesiones de omp",
   "author": "nter",
   "private": true,

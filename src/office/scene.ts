@@ -56,7 +56,7 @@ export function nextAvailableZapActor(actors: Iterable<Pick<Actor, 'id' | 'depar
 export function computeLayout(contentWidth: number, viewport: { width: number; height: number }, scale?: number, requestedRoomWidth = 210): SceneLayout {
   const unit = viewport.height / 180, visible = viewport.width / unit;
   const roomWidth = requestedRoomWidth;
-  const s = scale ?? Math.min(1, visible / Math.max(1, contentWidth));
+  const s = Math.min(scale ?? 1, 1, visible / Math.max(1, contentWidth));
   const worldWidth = visible / s;
   return { unit, scale: s, worldWidth, roomWidth, bossX: worldWidth - 83 };
 }
@@ -66,14 +66,10 @@ export function toScreen(layout: SceneLayout, point: Point): Point {
 export function toWorld(layout: SceneLayout, point: Point): Point {
   return { x: point.x / (layout.unit * layout.scale), y: 180 + (point.y / layout.unit - 180) / layout.scale };
 }
-export function hitTest(layout: SceneLayout, point: Point, actors: Iterable<{ id: string; x: number; y: number }>, messenger: Point | null,
+export function hitTest(layout: SceneLayout, point: Point, actors: Iterable<{ id: string; x: number; y: number }>,
   projects: Iterable<Pick<Project, 'id' | 'x' | 'installed'>> = [], zapButton: Point | null = null): string | { project: string } | null {
   const world = toWorld(layout, point);
   if (zapButton && Math.abs(world.x - zapButton.x) <= 7 && Math.abs(world.y - zapButton.y) <= 5) return 'zap';
-  if (messenger) {
-    const position = toScreen(layout, messenger), factor = layout.unit * layout.scale;
-    if (Math.abs(position.x - point.x) < 22 * factor && point.y > position.y - 32 * factor && point.y < position.y + 35 * factor) return 'briefing';
-  }
   let best: string | null = null, distance = Infinity;
   for (const actor of actors) {
     const position = toScreen(layout, actor), factor = layout.unit * layout.scale;
@@ -92,20 +88,17 @@ export function hitTest(layout: SceneLayout, point: Point, actors: Iterable<{ id
 export interface SceneController {
   update(state: OfficeState): void;
   zap(actorId: string): void;
-  offerBriefing(): void;
-  dismissBriefing(): void;
   setVisible(visible: boolean): void;
   setAppearance(appearance: Appearance): void;
   setNames(names: OfficeNames): void;
   dispose(): void;
 }
 export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
-  handlers: { onSelect(actor: Actor): void; onProject(project: Project): void; onBoss(): void; onBriefing(): void }): SceneController {
+  handlers: { onSelect(actor: Actor): void; onProject(project: Project): void; onBoss(): void }): SceneController {
   const context = canvas.getContext('2d', { alpha: false })!;
   const painter = new Painter(context, logo);
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let state: OfficeState | null = null, frame = 0, last = performance.now(), visible = true, scale = 1, roomWidth = 210, focusOnly = false;
-  let messenger: { x: number; y: number; arrived: boolean } | null = null;
   let appearance: Appearance = DEFAULT_APPEARANCE;
   let names: OfficeNames = { cats: {}, projects: {} }, stress = 0;
   const zaps: ZapEffect[] = [];
@@ -265,11 +258,6 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
           reservedAreas.push({ x: actor.x + 15, y: actor.y - 34, width: 18, height: 18 });
         }
       }
-      if (messenger) {
-        reservedAreas.push({ x: messenger.x - 17, y: messenger.y - 36, width: 34, height: 72 });
-        reservedAreas.push({ x: messenger.x - 19, y: messenger.y + 35, width: 45, height: 10 });
-        if (messenger.arrived) reservedAreas.push({ x: messenger.x - 7, y: messenger.y - 35, width: 18, height: 18 });
-      }
       if (logo.complete && logo.naturalWidth) {
         reservedAreas.push({ x: l.worldWidth / 2 - 11 / l.scale, y: 180 - 180 / l.scale, width: 22 / l.scale, height: 21 / l.scale });
       }
@@ -284,20 +272,6 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
         painter.activityBubble(0, 0, content);
         context.restore();
       }
-    }
-    if (messenger) {
-      const targetX = l.bossX - 44;
-      if (!messenger.arrived) {
-        messenger.x = Math.min(targetX, messenger.x + dt * 85);
-        messenger.arrived = messenger.x >= targetX;
-      }
-      const position = toScreen(l, messenger);
-      context.save(); context.translate(position.x / l.unit, position.y / l.unit); context.scale(l.scale, l.scale);
-      painter.character(0, 0, appearance.theme === 'robots' ? { kind: 'robot', role: 'agent', color: appearance.robotColors?.agent } : { kind: 'cat', coat: '#3f3a40' }, 'messenger', 'stand',
-        { walking: !messenger.arrived, frame: messenger.arrived ? limbFrame : walkingFrame });
-      if (messenger.arrived) painter.bubble(2, -24, '✉', '#7d6a3c');
-      painter.text('MENSAJERO', -18, 43);
-      context.restore();
     }
     if (logo.complete && logo.naturalWidth) context.drawImage(logo, size.width / l.unit / 2 - 11, 0, 22, 21);
     const resizing = state && (Math.abs(scale - computeLayout(state.width, size, undefined, state.roomWidth).scale) > 0.001 ||
@@ -316,20 +290,19 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
       animating ||= !reduced.matches && !actor.moving && (actor.stage === 'seated' || actor.stage === 'waiting') && activity !== 'none';
     }
     const focusAnimation = !reduced.matches && focusing;
-    focusOnly = focusAnimation && !moving && !animating && !resizing && !(messenger && !messenger.arrived) && !zaps.length;
-    if (visible && (resizing || moving || animating || focusAnimation || (messenger && !messenger.arrived) || zaps.length)) frame = requestAnimationFrame(draw);
+    focusOnly = focusAnimation && !moving && !animating && !resizing && !zaps.length;
+    if (visible && (resizing || moving || animating || focusAnimation || zaps.length)) frame = requestAnimationFrame(draw);
   };
   const click = (event: MouseEvent) => {
     if (!state) return;
     const box = canvas.getBoundingClientRect(), l = layout();
     const hit = hitTest(l, { x: event.clientX - box.left, y: event.clientY - box.top },
-      [...state.actors.values()].filter(actor => !actor.departing), messenger?.arrived ? messenger : null,
+      [...state.actors.values()].filter(actor => !actor.departing),
       state.projects.values(), appearance.theme === 'robots' ? { x: l.bossX - 22, y: 64 } : null);
     if (hit === 'zap') {
       const target = nextAvailableZapActor(state.actors.values(), lastManualZapTarget);
       if (target) { lastManualZapTarget = target; queueZap(target); }
-    } else if (hit === 'briefing') handlers.onBriefing();
-    else if (hit === 'boss') handlers.onBoss();
+    } else if (hit === 'boss') handlers.onBoss();
     else if (typeof hit === 'string') handlers.onSelect(state.actors.get(hit)!);
     else if (hit) handlers.onProject(state.projects.get(hit.project)!);
   };
@@ -342,8 +315,6 @@ export function createScene(canvas: HTMLCanvasElement, logo: HTMLImageElement,
   return {
     update(next) { state = next; stress = workloadStress([...next.actors.values()].filter(actor => !actor.departing).map(actor => actor.info)); wake(); },
     zap(actorId) { queueZap(actorId); },
-    offerBriefing() { if (!messenger) messenger = { x: -20, y: 124, arrived: false }; wake(); },
-    dismissBriefing() { messenger = null; wake(); },
     setAppearance(next) { appearance = next; if (next.theme !== 'robots') clearZaps(); wake(); },
     setNames(next) { names = next; wake(); },
     setVisible(next) {

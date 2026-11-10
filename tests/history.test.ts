@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { importSessionMetadata, openHistory, type ConsoleIdentity } from '../src/history.ts';
+import { importSessionMetadata, openHistory } from '../src/history.ts';
 import type { Conversation } from '../src/conversation.ts';
 
 const directories: string[] = [];
@@ -17,10 +17,6 @@ function conversation(sessionId: string, lastActiveAt: string): Conversation {
   return { profile: 'default', sessionId, project: 'Project', cwd: 'C:\\Projects\\Project', title: sessionId,
     sessionFile: null, openedAt: '2026-10-01T10:00:00.000Z', lastActiveAt, closedAt: null };
 }
-function consoleRef(instanceId: string, kind: 'main' | 'subagent' = 'main'): ConsoleIdentity {
-  return { instanceId, generation: 'generation-1', sessionId: 'session-' + instanceId, kind };
-}
-
 test('recent conversations include exactly seven rolling days, newest first, not calendar weeks', () => {
   const history = openHistory(databasePath());
   try {
@@ -45,55 +41,6 @@ test('reopening a catalog preserves metadata and updating the same conversation 
     const rows = reopened.listRecent(now);
     expect(rows.map(row => [row.sessionId, row.title, row.cwd])).toEqual([['one', 'Continued conversation', 'C:\\Projects\\Project']]);
   } finally { reopened.close(); }
-});
-
-test('each confirmed zero-to-one console transition can trigger a visit even in the same day', () => {
-  const history = openHistory(databasePath());
-  const a = consoleRef('A'), b = consoleRef('B'), c = consoleRef('C');
-  try {
-    expect(history.reconcileConsoles({ complete: true, consoles: [] })).toBeNull();
-    const first = history.reconcileConsoles({ complete: true, consoles: [a] });
-    expect(first?.console.instanceId).toBe('A');
-    expect(history.markBriefed(first!.id)).toBe(true);
-    expect(history.reconcileConsoles({ complete: true, consoles: [a] })).toBeNull();
-    expect(history.reconcileConsoles({ complete: true, consoles: [a, b] })).toBeNull();
-    expect(history.reconcileConsoles({ complete: true, consoles: [b] })).toBeNull();
-    expect(history.reconcileConsoles({ complete: true, consoles: [] })).toBeNull();
-    const second = history.reconcileConsoles({ complete: true, consoles: [c] });
-    expect(second?.console.instanceId).toBe('C');
-    expect(second?.id).not.toBe(first?.id);
-    history.markBriefed(second!.id);
-    expect(history.reconcileConsoles({ complete: true, consoles: [] })).toBeNull();
-    // Two consoles registering within one inventory still end the zero-console state.
-    expect(history.reconcileConsoles({ complete: true, consoles: [a, b] })).not.toBeNull();
-  } finally { history.close(); }
-});
-
-test('subagents and incomplete inventories cannot rearm a visit or count as extra consoles', () => {
-  const history = openHistory(databasePath());
-  const a = consoleRef('A'), child = consoleRef('mouse', 'subagent');
-  try {
-    const first = history.reconcileConsoles({ complete: true, consoles: [a, child, a] });
-    expect(first?.console.instanceId).toBe('A');
-    history.markBriefed(first!.id);
-    expect(history.reconcileConsoles({ complete: false, consoles: [] })).toBeNull();
-    expect(history.reconcileConsoles({ complete: true, consoles: [a, child] })).toBeNull();
-    expect(history.reconcileConsoles({ complete: true, consoles: [child] })).toBeNull();
-    expect(history.reconcileConsoles({ complete: true, consoles: [a] })?.console.instanceId).toBe('A');
-  } finally { history.close(); }
-});
-
-test('restarting the office with the same live console does not repeat a presented visit', () => {
-  const path = databasePath(), a = consoleRef('A');
-  const first = openHistory(path);
-  const briefing = first.reconcileConsoles({ complete: true, consoles: [a] });
-  first.markBriefed(briefing!.id);
-  first.close();
-  const second = openHistory(path);
-  try {
-    expect(second.reconcileConsoles({ complete: true, consoles: [a] })).toBeNull();
-    expect(second.markBriefed('old-or-unrelated-request')).toBe(false);
-  } finally { second.close(); }
 });
 
 test('a missing conversation file differs from an explicitly ephemeral session', () => {

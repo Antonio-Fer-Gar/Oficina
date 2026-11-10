@@ -25,17 +25,29 @@ test('1, 7 and 20 projects scale the whole room uniformly and keep the boss visi
   }
   expect(computeLayout(contentFor(20), viewport).scale).toBeLessThan(1);
 });
-test('actor and messenger clicks remain accurate at different display widths', () => {
+test('fullscreen and narrow viewports fit the whole office even during a scale transition', () => {
+  for (const size of [{ width: 1920, height: 1080 }, { width: 320, height: 800 }, { width: 3840, height: 1080 }]) {
+    const layout = computeLayout(1000, size, 1);
+    const left = toScreen(layout, { x: 0, y: 0 });
+    const right = toScreen(layout, { x: 1000, y: 180 });
+    expect(left.x).toBe(0);
+    expect(left.y).toBeGreaterThanOrEqual(0);
+    expect(right.x).toBeLessThanOrEqual(size.width + 0.000001);
+    expect(right.y).toBeCloseTo(size.height, 6);
+    expect(toScreen(layout, { x: 10, y: 180 }).x).toBeCloseTo(
+      size.height - toScreen(layout, { x: 0, y: 170 }).y, 6);
+  }
+});
+test('actor clicks remain accurate at different display widths', () => {
   const actors = [{ id: 'a', x: 400, y: 101 }, { id: 'b', x: 430, y: 119 }];
   for (const size of [viewport, { width: 1280, height: 360 }]) {
     const layout = computeLayout(contentFor(12), size);
     const screen = (x: number, y: number) => toScreen(layout, { x, y });
     expect(toWorld(layout, screen(430, 125)).x).toBeCloseTo(430, 6);
     expect(toWorld(layout, screen(430, 125)).y).toBeCloseTo(125, 6);
-    expect(hitTest(layout, screen(400, 108), actors, null)).toBe('a');
-    expect(hitTest(layout, screen(430, 128), actors, null)).toBe('b');
-    expect(hitTest(layout, screen(700, 108), actors, null)).toBeNull();
-    expect(hitTest(layout, screen(400, 108), actors, { x: 400, y: 112 })).toBe('briefing');
+    expect(hitTest(layout, screen(400, 108), actors)).toBe('a');
+    expect(hitTest(layout, screen(430, 128), actors)).toBe('b');
+    expect(hitTest(layout, screen(700, 108), actors)).toBeNull();
   }
 });
 test('the desk zap button has hit-test priority without stealing nearby boss clicks', () => {
@@ -43,9 +55,9 @@ test('the desk zap button has hit-test priority without stealing nearby boss cli
     const layout = computeLayout(contentFor(12), size);
     const screen = (x: number, y: number) => toScreen(layout, { x, y });
     const button = { x: layout.bossX - 22, y: 64 };
-    expect(hitTest(layout, screen(button.x, button.y), [], null, [], button)).toBe('zap');
-    expect(hitTest(layout, screen(layout.bossX - 14, 68), [], null, [], button)).toBe('boss');
-    expect(hitTest(layout, screen(layout.bossX, 99), [], null, [], button)).toBe('boss');
+    expect(hitTest(layout, screen(button.x, button.y), [], [], button)).toBe('zap');
+    expect(hitTest(layout, screen(layout.bossX - 14, 68), [], [], button)).toBe('boss');
+    expect(hitTest(layout, screen(layout.bossX, 99), [], [], button)).toBe('boss');
   }
 });
 test('manual zap selection rotates over present actors and skips departing actors', () => {
@@ -64,11 +76,11 @@ test('project desks resolve at any scale without stealing clicks from characters
   for (const size of [viewport, { width: 1280, height: 360 }]) {
     const layout = computeLayout(contentFor(20), size);
     const screen = (x: number, y: number) => toScreen(layout, { x, y });
-    expect(hitTest(layout, screen(420, 65), [], null, projects)).toEqual({ project: 'project' });
-    expect(hitTest(layout, screen(400, 50), [{ id: 'cat', x: 400, y: 50 }], null, projects)).toBe('cat');
-    expect(hitTest(layout, screen(400, 75), [{ id: 'seated-cat', x: 400, y: 101 }], null, projects)).toBe('seated-cat');
-    expect(hitTest(layout, screen(600, 65), [], null, projects)).toBeNull();
-    expect(hitTest(layout, screen(440, 65), [], null, projects)).toBeNull();
+    expect(hitTest(layout, screen(420, 65), [], projects)).toEqual({ project: 'project' });
+    expect(hitTest(layout, screen(400, 50), [{ id: 'cat', x: 400, y: 50 }], projects)).toBe('cat');
+    expect(hitTest(layout, screen(400, 75), [{ id: 'seated-cat', x: 400, y: 101 }], projects)).toBe('seated-cat');
+    expect(hitTest(layout, screen(600, 65), [], projects)).toBeNull();
+    expect(hitTest(layout, screen(440, 65), [], projects)).toBeNull();
   }
 });
 test('occupancy growth scales the break room and work area together without moving the floor', () => {
@@ -94,10 +106,10 @@ test('walking across the room doorway stays continuous and selectable', () => {
     expect(Math.hypot(point.x - previous.x, point.y - previous.y)).toBeLessThan(4);
     expect(toWorld(layout, point).x).toBeCloseTo(x, 6);
     expect(toWorld(layout, point).y).toBeCloseTo(120, 6);
-    expect(hitTest(layout, point, [{ id: 'walking', x, y: 120 }], null)).toBe('walking');
+    expect(hitTest(layout, point, [{ id: 'walking', x, y: 120 }])).toBe('walking');
     previous = point;
   }
-  expect(hitTest(layout, toScreen(layout, { x: layout.bossX, y: 99 }), [], null)).toBe('boss');
+  expect(hitTest(layout, toScreen(layout, { x: layout.bossX, y: 99 }), [])).toBe('boss');
 });
 test('activity bubbles avoid labels, badges, existing bubbles and scene edges', () => {
   const bounds: SceneRect = { x: 0, y: 0, width: 180, height: 130 };

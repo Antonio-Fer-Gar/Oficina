@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { applyBridgeInstall, planBridgeInstall } from '../src/install.ts';
+import { applyBridgeInstall, autoUpdateInstalledBridges, planBridgeInstall } from '../src/install.ts';
 
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
@@ -30,6 +30,22 @@ test('installing twice is idempotent and leaves the profile configuration and ot
   expect(update.action).toBe('update');
   applyBridgeInstall(update);
   expect(readFileSync(join(agent, 'extensions', 'nter-office', 'index.js'), 'utf8')).toBe('bridge v2');
+});
+test('automatically updates installed bridges across profiles without overwriting modified or missing ones', () => {
+  const { home, agent, source } = setup();
+  applyBridgeInstall(planBridgeInstall({ source, profile: 'default', home }));
+  applyBridgeInstall(planBridgeInstall({ source, profile: 'work', home }));
+  applyBridgeInstall(planBridgeInstall({ source, profile: 'edited', home }));
+  const edited = join(home, '.omp', 'profiles', 'edited', 'agent', 'extensions', 'nter-office', 'index.js');
+  writeFileSync(edited, 'user changes');
+  mkdirSync(join(home, '.omp', 'profiles', 'empty', 'agent'), { recursive: true });
+  writeFileSync(source, 'bridge v2');
+  autoUpdateInstalledBridges(source, home);
+  expect(readFileSync(join(agent, 'extensions', 'nter-office', 'index.js'), 'utf8')).toBe('bridge v2');
+  expect(readFileSync(join(home, '.omp', 'profiles', 'work', 'agent', 'extensions', 'nter-office', 'index.js'), 'utf8')).toBe('bridge v2');
+  expect(readFileSync(edited, 'utf8')).toBe('user changes');
+  expect(existsSync(join(home, '.omp', 'profiles', 'empty', 'agent', 'extensions', 'nter-office'))).toBe(false);
+  expect(readFileSync(join(agent, 'extensions', 'mine', 'index.ts'), 'utf8')).toBe('user extension');
 });
 test('a user-modified or foreign folder is never overwritten or removed', () => {
   const { home, agent, source } = setup();

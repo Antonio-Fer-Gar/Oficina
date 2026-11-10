@@ -172,7 +172,7 @@ export class Painter {
     R(0, 0, width, 20, '#dedfce'); R(0, 19, width, 4, '#8b9980');
   }
   /** `who` selects an animal, a role-coloured robot, or the seated human lead. */
-  character(x: number, y: number, who: { kind: 'cat'; coat: string } | { kind: 'mole' } | { kind: 'mouse' } | { kind: 'dog'; breed: Breed; stress?: number } | { kind: 'robot'; role: 'agent' | 'subagent'; color?: RobotColor } | { kind: 'human'; stress?: number; skin?: HumanSkin; hair?: HumanHairColor; style?: HumanHairStyle; gender?: HumanGender }, outfit: Outfit | 'messenger', pose: Pose, motion?: CharacterMotion) {
+  character(x: number, y: number, who: { kind: 'cat'; coat: string } | { kind: 'mole' } | { kind: 'mouse' } | { kind: 'dog'; breed: Breed; stress?: number } | { kind: 'robot'; role: 'agent' | 'subagent'; color?: RobotColor } | { kind: 'human'; stress?: number; skin?: HumanSkin; hair?: HumanHairColor; style?: HumanHairStyle; gender?: HumanGender }, outfit: Outfit, pose: Pose, motion?: CharacterMotion) {
     const c = this.c, R = this.rect.bind(this);
     c.save(); c.translate(Math.round(x), Math.round(y));
     this.lastRobot = who.kind === 'robot';
@@ -284,7 +284,7 @@ export class Painter {
     if (pose === 'coffee') { R(11, 15, 7, 7, '#f5efda'); R(12, 14, 5, 2, '#7f6754'); }
     c.restore();
   }
-  private outfit(outfit: Outfit | 'messenger', back = false, moving = false) {
+  private outfit(outfit: Outfit, back = false, moving = false) {
     const R = this.rect.bind(this), base = OUTFIT_COLORS[outfit];
     R(-9, 5, 20, 17, base); if (!moving) { R(-13, 7, 5, 11, base); R(11, 7, 5, 11, base); } R(-9, 20, 20, 2, '#c6c2af');
     if (back && outfit !== 'stripes') {
@@ -632,9 +632,8 @@ export class Painter {
   }
 }
 export const COATS = ['#d5a376', '#67616d', '#e5e0d5', '#9c9a9e', '#b58b73'];
-// `messenger` is reserved for the visiting cat so it never looks like one of the user's agents.
-const OUTFIT_COLORS: Record<Outfit | 'messenger', string> = {
-  shirt: '#8fb5ca', polo: '#f0ede3', jacket: '#8d9b80', suit: '#3e4652', hoodie: '#c9705a', stripes: '#3f5a7a', labcoat: '#f6f6f2', messenger: '#c9a96a',
+const OUTFIT_COLORS: Record<Outfit, string> = {
+  shirt: '#8fb5ca', polo: '#f0ede3', jacket: '#8d9b80', suit: '#3e4652', hoodie: '#c9705a', stripes: '#3f5a7a', labcoat: '#f6f6f2',
 };
 interface DogStyle {
   fur: string; face: string; ear: string; inner: string; ears: 'pointed' | 'floppy' | 'bat'; longEars?: boolean; longMuzzle?: boolean;

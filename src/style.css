@@ -41,10 +41,16 @@ button[aria-pressed="true"] { background: #d9dccd; }
 .skills-list .hint { margin-left: 19px; white-space: pre-wrap; }
 @media (max-width: 600px) { .toolbar .status { display: none; } }
 @media (max-width: 400px) { .toolbar { gap: 2px; padding-inline: 4px; } .toolbar button { padding-inline: 5px; } }
-.card { right: 10px; width: 360px; }
+.card { right: 10px; width: min(680px, calc(100% - 20px)); }
 .card dl { display: grid; grid-template-columns: 70px 1fr; gap: 2px 8px; margin: 0 0 8px; }
 .card dt { color: #6d756a; } .card dd { margin: 0; word-break: break-all; }
 .card label { display: block; margin-top: 6px; } .card select, .card textarea { width: 100%; font: inherit; margin-top: 3px; }
+.card textarea { min-height: 110px; padding: 8px; line-height: 1.5; resize: vertical; }
+.transcript { min-height: 150px; height: min(40vh, 420px); overflow: auto; padding: 12px; border: 1px solid #aab1a3; background: #fff; color: #242a24; line-height: 1.55; user-select: text; }
+.transcript article + article { border-top: 1px solid #dfe0d6; margin-top: 12px; padding-top: 12px; }
+.transcript p { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.transcript:focus-visible { outline: 2px solid #46553d; outline-offset: 2px; }
+.card h2, #history-conversation h2 { font-size: 16px; margin: 10px 0 6px; }
 .row { display: flex; gap: 6px; margin-top: 6px; }
 .hint { margin: 4px 0 0; color: #5d655a; min-height: 1em; }
 .hint.error { color: #9a2f1d; }

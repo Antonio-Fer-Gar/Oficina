@@ -17,6 +17,7 @@
     <button id="mute" type="button" aria-pressed="false">Sonido</button>
     <button id="customize-button" type="button">Ajustes</button>
     <button id="minimize" type="button" aria-label="Minimizar">–</button>
+    <button id="maximize" type="button" aria-label="Maximizar ventana" title="Maximizar ventana">□</button>
     <button id="close" type="button" aria-label="Cerrar oficina">×</button>
   </div>
   <div id="notices" class="notices" aria-live="assertive"></div>
@@ -34,6 +35,18 @@
   </section>
   <section id="card" class="panel card" hidden>
     <header><strong id="card-name"></strong><button id="card-close" type="button" aria-label="Cerrar ficha">×</button></header>
+    <h2>Conversación</h2>
+    <div id="card-transcript" class="transcript" tabindex="0" aria-label="Conversación del agente"></div>
+    <p id="card-transcript-status" class="hint" role="status"></p>
+    <form id="card-questions" class="question-form" hidden></form>
+    <div id="card-message-block">
+      <label><span id="card-message-label">Mensaje para este agente</span><textarea id="card-message" rows="5" maxlength="131072"></textarea></label>
+      <div class="row">
+        <button id="card-steer" type="button" title="Se entrega en cuanto el agente pueda leerlo">Enviar ahora</button>
+        <button id="card-follow" type="button" title="Se entrega cuando el agente termine lo actual">Al terminar</button>
+      </div>
+    </div>
+    <p id="card-result" class="hint" role="status"></p>
     <form id="cat-name-form" class="name-form">
       <label><span id="agent-name-label">Nombre del gato</span> <input id="cat-name-input" type="text" maxlength="48" autocomplete="off" placeholder="Nombre original"></label>
       <button id="cat-name-save" type="submit">Guardar nombre</button>
@@ -54,15 +67,6 @@
     </div>
     <button id="card-model-confirm" type="button" disabled>Confirmar modelo y potencia</button>
     <p id="card-model-status" class="hint"></p>
-    <form id="card-questions" class="question-form" hidden></form>
-    <div id="card-message-block">
-      <label><span id="card-message-label">Mensaje para este agente</span><textarea id="card-message" rows="3" maxlength="131072"></textarea></label>
-      <div class="row">
-        <button id="card-steer" type="button" title="Se entrega en cuanto el agente pueda leerlo">Enviar ahora</button>
-        <button id="card-follow" type="button" title="Se entrega cuando el agente termine lo actual">Al terminar</button>
-      </div>
-    </div>
-    <p id="card-result" class="hint" role="status"></p>
   </section>
   <section id="project" class="panel card" hidden>
     <header><strong id="project-name"></strong><button id="project-close" type="button" aria-label="Cerrar proyecto">×</button></header>
@@ -83,7 +87,13 @@
   <section id="history" class="panel history" hidden>
     <header><strong>Conversaciones de los últimos 7 días</strong><button id="history-close" type="button" aria-label="Cerrar historial">×</button></header>
     <table><thead><tr><th>Proyecto</th><th>Conversación</th><th>Carpeta</th><th>Estado</th><th></th></tr></thead><tbody id="history-rows"></tbody></table>
+    <p class="hint">Las conversaciones activas permiten escribir desde su ficha. Para continuar una conversación cerrada, usa «Abrir en consola»; después podrás escribir desde la ficha cuando esté conectada.</p>
     <p id="history-result" class="hint" role="status"></p>
+    <section id="history-conversation" hidden aria-labelledby="history-conversation-title">
+      <h2 id="history-conversation-title"></h2>
+      <div id="history-transcript" class="transcript" tabindex="0" aria-label="Conversación guardada"></div>
+      <p id="history-transcript-status" class="hint" role="status"></p>
+    </section>
   </section>
   <section id="boss" class="panel history usage" hidden>
     <header><strong>Jefe humano · Usage de omp</strong><button id="boss-close" type="button" aria-label="Cerrar usage">×</button></header>
@@ -149,8 +159,13 @@
     <div class="row"><button id="setup-save" type="button" class="primary">Guardar</button></div>
     <div class="token-saving-settings" role="group" aria-labelledby="token-saving-label">
       <label class="token-saving-toggle"><input id="token-saving" type="checkbox" checked disabled aria-describedby="token-saving-description token-saving-status"> <span id="token-saving-label">Ahorro de tokens</span></label>
-      <p id="token-saving-description" class="hint">Activa instrucciones conservadoras: orienta al asistente a leer de forma selectiva y responder de manera concisa sin omitir razonamiento, seguridad, pruebas ni verificación relevantes. No garantiza reducir el uso real de tokens. Si el puente de omp falta o está desactualizado, usa el aviso para conectarlo o actualizarlo y reinicia las sesiones abiertas; tendrá efecto en los siguientes prompts una vez cargada la extensión.</p>
+      <p id="token-saving-description" class="hint">Activa instrucciones conservadoras: orienta al asistente a leer de forma selectiva y responder de manera concisa sin omitir razonamiento, seguridad, pruebas ni verificación relevantes. No garantiza reducir el uso real de tokens. Si falta el puente de omp, usa el aviso para conectarlo. Las actualizaciones posteriores son automáticas; reinicia las sesiones abiertas para cargar el puente nuevo.</p>
       <p id="token-saving-status" class="hint" role="status"></p>
+    </div>
+    <div class="token-saving-settings">
+      <label class="token-saving-toggle"><input id="omp-auto-update" type="checkbox" checked disabled> Actualizar omp automáticamente</label>
+      <p class="hint">Mantiene omp actualizado silenciosamente cuando es posible.</p>
+      <p id="omp-auto-update-status" class="hint" role="status"></p>
     </div>
     <div class="window-settings" role="group" aria-label="Ajustes de ventana">
       <label><input id="always-on-top" type="checkbox"> Siempre encima</label>

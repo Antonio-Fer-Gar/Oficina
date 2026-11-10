@@ -1,5 +1,4 @@
 import { Database } from 'bun:sqlite';
-import { randomUUID } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { dirname, join, win32 } from 'node:path';
@@ -9,28 +8,9 @@ import { ConversationSchema, type Conversation, type ConversationRecord } from '
 const Identifier = z.string().min(1).max(4096).refine(value => !value.includes('\0'));
 const Timestamp = z.iso.datetime({ offset: true });
 
-const ConsoleIdentitySchema = z.object({
-  instanceId: Identifier,
-  generation: Identifier,
-  sessionId: Identifier,
-  kind: z.enum(['main', 'subagent']),
-});
-export type ConsoleIdentity = z.infer<typeof ConsoleIdentitySchema>;
-const ConsoleSnapshotSchema = z.object({
-  complete: z.boolean(),
-  consoles: z.array(ConsoleIdentitySchema),
-});
-export type ConsoleSnapshot = z.infer<typeof ConsoleSnapshotSchema>;
-const BriefingSchema = z.object({ id: Identifier, console: ConsoleIdentitySchema });
-export type Briefing = z.infer<typeof BriefingSchema>;
-const VisitStateSchema = z.object({ roots: z.array(z.string()), pending: BriefingSchema.nullable() });
-const StoredState = z.object({ value: z.string() });
-
 export interface HistoryStore {
   upsert(conversation: Conversation): void;
   listRecent(now: Date): ConversationRecord[];
-  reconcileConsoles(snapshot: ConsoleSnapshot): Briefing | null;
-  markBriefed(id: string): boolean;
   close(): void;
 }
 
@@ -48,7 +28,6 @@ export function openHistory(path: string): HistoryStore {
       closedAt TEXT, PRIMARY KEY (profile, sessionId)
     );
     CREATE INDEX IF NOT EXISTS conversations_recent ON conversations(lastActiveMs DESC);
-    CREATE TABLE IF NOT EXISTS office_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `);
   const upsert = db.query(`
     INSERT INTO conversations (profile, sessionId, project, cwd, title, sessionFile, openedAt, lastActiveAt, lastActiveMs, closedAt)
@@ -66,41 +45,6 @@ export function openHistory(path: string): HistoryStore {
     FROM conversations WHERE lastActiveMs >= ? AND lastActiveMs <= ?
     ORDER BY lastActiveMs DESC, profile, sessionId
   `);
-  const readState = db.query("SELECT value FROM office_state WHERE key = 'console-visits'");
-  const saveState = db.query("INSERT INTO office_state (key, value) VALUES ('console-visits', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
-  const reconcile = db.transaction((input: ConsoleSnapshot): Briefing | null => {
-    const snapshot = ConsoleSnapshotSchema.parse(input);
-    // An incomplete inventory is not evidence that the user closed all consoles.
-    if (!snapshot.complete) return null;
-    const stored = readState.get();
-    const previous = stored
-      ? VisitStateSchema.parse(JSON.parse(StoredState.parse(stored).value))
-      : { roots: [], pending: null };
-    const roots = new Map<string, ConsoleIdentity>();
-    for (const console of snapshot.consoles) {
-      if (console.kind === 'main') roots.set(JSON.stringify([console.instanceId, console.generation, console.sessionId]), console);
-    }
-    let pending = previous.pending;
-    if (pending) {
-      const ownerKey = JSON.stringify([pending.console.instanceId, pending.console.generation, pending.console.sessionId]);
-      if (!roots.has(ownerKey)) pending = null;
-    }
-    // Two consoles may register within one poll; leaving the zero state still deserves a visit.
-    if (previous.roots.length === 0 && roots.size > 0) {
-      const owner = roots.values().next().value;
-      if (owner) pending = { id: randomUUID(), console: owner };
-    }
-    saveState.run(JSON.stringify({ roots: [...roots.keys()], pending }));
-    return pending;
-  });
-  const acknowledge = db.transaction((id: string): boolean => {
-    const stored = readState.get();
-    if (!stored) return false;
-    const state = VisitStateSchema.parse(JSON.parse(StoredState.parse(stored).value));
-    if (state.pending?.id !== id) return false;
-    saveState.run(JSON.stringify({ ...state, pending: null }));
-    return true;
-  });
   return {
     upsert(input) {
       const row = ConversationSchema.parse(input);
@@ -118,8 +62,6 @@ export function openHistory(path: string): HistoryStore {
         return { ...row, availability };
       });
     },
-    reconcileConsoles: reconcile,
-    markBriefed: acknowledge,
     close() { db.close(); },
   };
 }

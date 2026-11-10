@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -49,6 +49,27 @@ export function applyBridgeInstall(plan: InstallPlan): void {
     writeFileSync(join(plan.target, MARKER), JSON.stringify({ sha256: digest(bytes), installedAt: new Date().toISOString() }));
   } else if (plan.action === 'remove') rmSync(plan.target, { recursive: true });
   else if (plan.action === 'refuse') throw new Error(plan.reason);
+}
+
+/** Update only intact bridges already owned by the office, without changing other profile data. */
+export function autoUpdateInstalledBridges(source: string, home = homedir()): void {
+  const profiles = ['default'];
+  const root = join(home, '.omp', 'profiles');
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (entry.isDirectory() && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(entry.name) && entry.name !== 'default') profiles.push(entry.name);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.warn('[bridge] No se pudieron consultar los perfiles de omp.');
+  }
+  for (const profile of profiles) {
+    try {
+      const plan = planBridgeInstall({ source, profile, home });
+      if (plan.action === 'update') applyBridgeInstall(plan);
+    } catch {
+      console.warn('[bridge] No se pudo actualizar el puente de un perfil.');
+    }
+  }
 }
 
 if (import.meta.main) {

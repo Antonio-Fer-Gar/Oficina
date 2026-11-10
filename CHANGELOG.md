@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.15
+
+### Added
+
+- Lectura de conversaciones desde la oficina y una ficha de agente más cómoda para leer y escribir.
+- Instalación de omp si falta y actualización automática configurable cuando no hay sesiones activas.
+- Botón para maximizar y restaurar la ventana.
+
+### Changed
+
+- El historial se abre desde su botón sin mensajero; la escena se adapta a ventanas grandes y pequeñas.
+- Los puentes de omp instalados por la oficina se actualizan automáticamente al abrirla, sin sobrescribir modificaciones del usuario.
+
 ## 0.1.14
 
 ### Added

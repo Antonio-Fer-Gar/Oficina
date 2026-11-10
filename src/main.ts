@@ -8,8 +8,9 @@ import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { AgentInfoSchema, AgentRefSchema, OfficeCommandSchema, type AgentInfo, type AgentRef } from './bridge/protocol.ts';
 import type { ConversationRecord } from './conversation.ts';
+import { readConversation } from './conversation-view.ts';
 import { focusTerminal, type FocusResult } from './terminal.ts';
-import { applyBridgeInstall, planBridgeInstall } from './install.ts';
+import { applyBridgeInstall, autoUpdateInstalledBridges, planBridgeInstall } from './install.ts';
 import { AppearanceSchema } from './office/appearance.ts';
 import { OfficeNamesSchema, RenameSchema, catNameKey, projectNameKey, type OfficeNames } from './office/names.ts';
 import { fetchUsage } from './usage.ts';
@@ -18,6 +19,7 @@ import { checkAppUpdate, downloadInstaller, latestAppUpdate, type DownloadedUpda
 import { importManagedSkill, listInstalledSkills, listManagedSkills, setManagedSkillEnabled } from './skills.ts';
 import { CatalogBrowser, type CatalogSkill } from './catalog-browser.ts';
 import { extractCatalogZip } from './catalog-archive.ts';
+import { startOmpMaintenance } from './omp-maintenance.ts';
 import { z } from 'zod';
 
 const dataDir = process.env.NTER_OFFICE_DATA ?? join(process.env.LOCALAPPDATA ?? homedir(), 'nter-omp-office');
@@ -46,12 +48,13 @@ const PreferencesSchema = z.object({
   position: z.object({ x: z.number(), y: z.number(), width: z.number().optional(), height: z.number().optional() }).nullable().catch(null),
   alwaysOnTop: z.boolean().catch(false),
   tokenSaving: z.boolean().catch(true),
+  ompAutoUpdate: z.boolean().catch(true),
   names: OfficeNamesSchema.catch({ cats: {}, projects: {} }),
 });
 type Preferences = z.infer<typeof PreferencesSchema>;
 function preferences(): Preferences {
   try { return PreferencesSchema.parse(JSON.parse(readFileSync(preferencesFile, 'utf8'))); }
-  catch { return { muted: false, appearance: null, position: null, alwaysOnTop: false, tokenSaving: true, names: { cats: {}, projects: {} } }; }
+  catch { return { muted: false, appearance: null, position: null, alwaysOnTop: false, tokenSaving: true, ompAutoUpdate: true, names: { cats: {}, projects: {} } }; }
 }
 function savePreferences(change: Partial<Preferences>) {
   mkdirSync(dataDir, { recursive: true });
@@ -65,7 +68,7 @@ function startWorker() {
   worker = spawn(bun, [script], { cwd: dataDir, env: { ...process.env, NTER_OFFICE_DATA: dataDir }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   worker.stderr.on('data', chunk => console.error('[worker]', String(chunk)));
   createInterface({ input: worker.stdout }).on('line', line => {
-    let message: { type: string; id?: string; result?: unknown; error?: string; agents?: unknown[]; complete?: boolean; briefing?: { id: string }; message?: string };
+    let message: { type: string; id?: string; result?: unknown; error?: string; agents?: unknown[]; complete?: boolean; message?: string };
     try { message = JSON.parse(line); } catch { return; }
     if (message.type === 'reply' && message.id) {
       const waiter = pending.get(message.id); pending.delete(message.id);
@@ -79,8 +82,7 @@ function startWorker() {
       if (!now.size) window?.flashFrame(false);
       attention = now;
       window?.webContents.send('office:agents', latest);
-    } else if (message.type === 'briefing' && message.briefing) window?.webContents.send('office:briefing', message.briefing.id);
-    else if (message.type === 'warning') console.warn('[worker]', message.message);
+    } else if (message.type === 'warning') console.warn('[worker]', message.message);
   });
   worker.on('exit', code => {
     for (const waiter of pending.values()) waiter.reject(new Error('El ayudante de la oficina se ha detenido'));
@@ -160,24 +162,26 @@ function savedBounds(): Electron.Rectangle | null {
   return fitBounds(requested, display.workArea);
 }
 function place() {
-  if (!window) return;
+  if (!window || window.isMaximized()) return;
   window.setBounds(savedBounds() ?? bounds(screen.getDisplayMatching(window.getBounds()).workArea));
 }
 function createWindow() {
   window = new BrowserWindow({
-    frame: false, resizable: true, maximizable: false, fullscreenable: false, skipTaskbar: false, show: false,
+    frame: false, resizable: true, maximizable: true, fullscreenable: false, skipTaskbar: false, show: false,
     minWidth: MIN_WINDOW_WIDTH, minHeight: MIN_WINDOW_HEIGHT,
     alwaysOnTop: preferences().alwaysOnTop, backgroundColor: '#b4b5ad', title: 'Oficina nter', icon: join(root, 'assets', 'nter-logo.png'),
     webPreferences: { preload: join(root, 'dist', 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, spellcheck: false },
   });
   window.setBounds(savedBounds() ?? bounds(screen.getPrimaryDisplay().workArea));
   const rememberBounds = () => {
-    if (!window) return;
+    if (!window || window.isMaximized() || window.isMinimized()) return;
     const { x, y, width, height } = window.getBounds();
     savePreferences({ position: { x, y, width, height } });
   };
   window.on('moved', rememberBounds);
   window.on('resize', rememberBounds);
+  window.on('maximize', () => window?.webContents.send('office:maximized', true));
+  window.on('unmaximize', () => window?.webContents.send('office:maximized', false));
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.on('minimize', () => window?.webContents.send('office:visibility', false));
@@ -190,7 +194,17 @@ ipcMain.handle('office:snapshot', () => latest);
 ipcMain.handle('office:send', (_event, command: unknown) => ask({ type: 'command', command: OfficeCommandSchema.parse(command) }));
 ipcMain.handle('office:focus', (_event, ref: unknown) => focusSession(AgentRefSchema.parse(ref)));
 ipcMain.handle('office:history', async () => (history = await ask<ConversationRecord[]>({ type: 'history' })));
-ipcMain.handle('office:briefed', (_event, id: unknown) => ask<boolean>({ type: 'briefed', briefingId: String(id) }));
+ipcMain.handle('office:read-conversation', async (_event, profile: unknown, sessionId: unknown) => {
+  const live = latest.agents.find(agent => !agent.parent && agent.conversation?.profile === profile && agent.conversation?.sessionId === sessionId);
+  const record = live?.conversation ?? history.find(item => item.profile === profile && item.sessionId === sessionId);
+  if (!record) throw new Error('Esta conversación ya no está disponible.');
+  if (!record.sessionFile) throw new Error('Esta sesión no tiene un archivo de conversación guardado.');
+  try { return await readConversation(record.sessionFile); }
+  catch (error) {
+    if (error instanceof Error && (error.message.startsWith('La conversación') || error.message.startsWith('La rama') || error.message.startsWith('El archivo') || error.message.startsWith('Este formato'))) throw error;
+    throw new Error('No se pudo leer el archivo de conversación. Puede que se haya movido o eliminado.');
+  }
+});
 ipcMain.handle('office:open-conversation', async (_event, profile: unknown, sessionId: unknown) => {
   const record = history.find(item => item.profile === profile && item.sessionId === sessionId);
   if (!record) return 'Esta conversación no está en la lista';
@@ -264,6 +278,10 @@ ipcMain.handle('office:set-appearance', (_event, value: unknown) => { savePrefer
 ipcMain.handle('office:token-saving', () => preferences().tokenSaving);
 ipcMain.handle('office:set-token-saving', (_event, enabled: unknown) => {
   savePreferences({ tokenSaving: z.boolean().parse(enabled) });
+});
+ipcMain.handle('office:omp-auto-update', () => preferences().ompAutoUpdate);
+ipcMain.handle('office:set-omp-auto-update', (_event, enabled: unknown) => {
+  savePreferences({ ompAutoUpdate: z.boolean().parse(enabled) });
 });
 ipcMain.handle('office:names', () => preferences().names);
 ipcMain.handle('office:rename', (_event, value: unknown): OfficeNames => {
@@ -340,6 +358,11 @@ ipcMain.on('office:set-always-on-top', (_event, value: unknown) => {
 });
 ipcMain.on('office:restore-bounds', () => { savePreferences({ position: null }); place(); });
 ipcMain.on('office:minimize', () => window?.minimize());
+ipcMain.handle('office:maximized', () => window?.isMaximized() ?? false);
+ipcMain.on('office:toggle-maximize', () => {
+  if (!window) return;
+  if (window.isMaximized()) window.unmaximize(); else window.maximize();
+});
 ipcMain.on('office:close', () => window?.close());
 
 // The helper PID reserves the launcher while Windows replaces the installed files.
@@ -421,9 +444,11 @@ else {
   app.on('second-instance', (_event, argv) => { if (!argv.includes('--from-omp') && window?.isMinimized()) window.restore(); });
   app.whenReady().then(() => {
     const updateError = consumeUpdateError();
+    autoUpdateInstalledBridges(join(root, 'dist', 'extension.js'));
     publishLauncher(process.pid);
     startWorker();
     createWindow();
+    startOmpMaintenance(dataDir, () => preferences().ompAutoUpdate);
     if (updateError) window?.once('ready-to-show', () => {
       if (window) void dialog.showMessageBox(window, { type: 'error', title: 'No se pudo instalar la actualización', message: updateError });
     });

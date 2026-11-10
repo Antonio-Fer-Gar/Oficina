@@ -13,7 +13,6 @@ import { findLegacyConsoles } from './legacy.ts';
 export const WorkerRequestSchema = z.discriminatedUnion('type', [
   z.object({ id: z.string(), type: z.literal('command'), command: OfficeCommandSchema }),
   z.object({ id: z.string(), type: z.literal('history') }),
-  z.object({ id: z.string(), type: z.literal('briefed'), briefingId: z.string() }),
 ]);
 const dataDir = process.env.NTER_OFFICE_DATA ?? join(process.env.LOCALAPPDATA ?? homedir(), 'nter-omp-office');
 const ompRoot = join(homedir(), '.omp');
@@ -58,13 +57,9 @@ async function poll() {
     if (Date.now() - lastScan > 10000) { lastScan = Date.now(); void scanLegacy(connected); }
     // Filter again on every poll: a console that registers after the scan must not appear twice.
     const agents = [...inventory.agents, ...(legacy ?? []).filter(agent => !connected.has(Number(agent.ref.agentId.slice(8))))];
-    // Until the first scan finishes the console count is not trustworthy for the messenger.
+    // Until the first scan finishes, the inventory is incomplete.
     const complete = inventory.complete && legacy !== null;
     send({ type: 'agents', agents, complete });
-    const briefing = store.reconcileConsoles({ complete, consoles: agents.map(agent => ({
-      instanceId: agent.ref.instanceId, generation: agent.ref.generation, sessionId: agent.ref.sessionId,
-      kind: agent.parent ? 'subagent' : 'main' })) });
-    if (briefing) send({ type: 'briefing', briefing });
   } catch (error) { send({ type: 'warning', message: error instanceof Error ? error.message : 'inventory failed' }); }
   finally { polling = false; }
 }
@@ -75,8 +70,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     const request = WorkerRequestSchema.parse(JSON.parse(line));
     id = request.id;
     if (request.type === 'command') send({ type: 'reply', id, result: await dispatchToBridge(join(dataDir, 'registry'), request.command) });
-    else if (request.type === 'history') send({ type: 'reply', id, result: store.listRecent(new Date()) });
-    else send({ type: 'reply', id, result: store.markBriefed(request.briefingId) });
+    else send({ type: 'reply', id, result: store.listRecent(new Date()) });
   } catch (error) { send({ type: 'reply', id, error: error instanceof Error ? error.message : 'invalid request' }); }
 }).on('close', () => { store.close(); process.exit(0); });
 

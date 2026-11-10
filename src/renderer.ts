@@ -23,7 +23,7 @@ const bell = new Audio('notification.wav');
 let agents: AgentInfo[] = [], muted = false, selected: string | null = null;
 let selectedProject: string | null = null;
 let names: OfficeNames = { cats: {}, projects: {} }, projectMembersKey = '', usageLoading = false;
-const heard = new Set<string>(), briefings: string[] = [];
+const heard = new Set<string>();
 const receivedMessages = new Map<string, number>(), deferredZaps: string[] = [];
 let appearanceReady = false;
 let questionFormKey: string | null = null, cardDisabled = false;
@@ -61,12 +61,7 @@ const scene = createScene($('office'), logo, {
   onSelect: actor => openCard(actor),
   onProject: project => openProject(project),
   onBoss: () => { void openBoss(); },
-  onBriefing: () => { void openHistory(); acknowledgeBriefings(); },
 });
-function acknowledgeBriefings() {
-  for (const id of briefings.splice(0)) void office.acknowledgeBriefing(id);
-  scene.dismissBriefing(); renderNotices();
-}
 function showMessageZap(id: string) {
   if (appearanceReady) scene.zap(id); else deferredZaps.push(id);
 }
@@ -115,7 +110,6 @@ function apply(update: OfficeUpdate) {
   }
 }
 const noticeButtons = new Map<string, { button: HTMLButtonElement; action: HTMLSpanElement; detail: HTMLElement; requestId: string | null }>();
-let briefingButton: HTMLButtonElement | null = null;
 // Inventory refreshes every second: keep existing notices so click results and animations survive.
 function renderNotices() {
   const root = $('notices'), waiting = agents.filter(item => item.phase === 'waiting-human');
@@ -152,14 +146,41 @@ function renderNotices() {
         (request ? ` · ${request.questions.length} ${request.questions.length === 1 ? 'pregunta' : 'preguntas'}` : '');
     }
   }
-  if (briefings.length && !briefingButton) {
-    briefingButton = document.createElement('button');
-    briefingButton.className = 'notice briefing';
-    briefingButton.textContent = '✉ Conversaciones de los últimos 7 días';
-    briefingButton.onclick = () => { void openHistory(); acknowledgeBriefings(); };
-    root.append(briefingButton);
-  } else if (!briefings.length && briefingButton) { briefingButton.remove(); briefingButton = null; }
 }
+let transcriptRequest = 0;
+let transcriptKey = '';
+async function showTranscript(profile: string, sessionId: string, area: 'card' | 'history') {
+  const request = ++transcriptRequest;
+  const key = JSON.stringify([area, profile, sessionId]);
+  const box = $(area === 'card' ? 'card-transcript' : 'history-transcript');
+  const status = $(area === 'card' ? 'card-transcript-status' : 'history-transcript-status');
+  if (transcriptKey !== key) { transcriptKey = key; box.replaceChildren(); delete box.dataset.signature; status.textContent = 'Cargando conversación…'; }
+  try {
+    const messages = await office.readConversation(profile, sessionId);
+    if (request !== transcriptRequest) return;
+    const signature = JSON.stringify(messages);
+    if (box.dataset.signature !== signature) {
+      const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+      const fragment = document.createDocumentFragment();
+      for (const message of messages) {
+        const article = document.createElement('article'), heading = document.createElement('strong'), text = document.createElement('p');
+        heading.textContent = message.role === 'user' ? 'Tú' : 'Agente';
+        text.textContent = message.text;
+        article.append(heading, text); fragment.append(article);
+      }
+      box.replaceChildren(fragment); box.dataset.signature = signature;
+      if (atBottom) box.scrollTop = box.scrollHeight;
+    }
+    status.textContent = messages.length ? 'Solo lectura; las respuestas aparecen al guardarse.' : 'Aún no hay mensajes guardados para mostrar.';
+  } catch (error) {
+    if (request === transcriptRequest) status.textContent = error instanceof Error ? error.message : 'No se pudo leer la conversación.';
+  }
+}
+setInterval(() => {
+  if ($('card').hidden || !selected) return;
+  const conversation = state.actors.get(selected)?.info.conversation;
+  if (conversation) void showTranscript(conversation.profile, conversation.sessionId, 'card');
+}, 3000);
 
 function pendingQuestion(info: AgentInfo | undefined): PendingQuestion | null {
   return info?.question?.questions.length ? info.question : null;
@@ -289,6 +310,8 @@ async function openCard(actor: Actor) {
   $('cat-name-result').textContent = '';
   selected = actor.id;
   const info = actor.info, select = $<HTMLSelectElement>('card-model');
+  if (info.conversation) void showTranscript(info.conversation.profile, info.conversation.sessionId, 'card');
+  else { ++transcriptRequest; transcriptKey = ''; $('card-transcript').replaceChildren(); $('card-transcript-status').textContent = 'Este agente no tiene una conversación guardada disponible.'; }
   $('card-result').textContent = ''; $('card-result').classList.remove('error');
   fillCard(actor); disableCard(false);
   $('card').hidden = false; $('history').hidden = true;
@@ -554,7 +577,10 @@ async function openHistory() {
   $('skills').hidden = true; $('setup').hidden = true;
   $('history').hidden = false; $('card').hidden = true; selected = null;
   const rows = $('history-rows'); rows.replaceChildren();
-  const records = await office.history().catch(() => []);
+  $('history-conversation').hidden = true; $('history-result').textContent = '';
+  let records;
+  try { records = await office.history(); }
+  catch { $('history-result').textContent = 'No se pudo cargar el historial. Inténtalo de nuevo.'; return; }
   const labels = { saved: 'Guardada', missing: 'Archivo no disponible', ephemeral: 'Sin historial guardado' };
   for (const record of records) {
     const row = document.createElement('tr');
@@ -568,7 +594,7 @@ async function openHistory() {
       $('history-result').textContent = error ?? '';
     };
     const conversation = document.createElement('button');
-    conversation.textContent = 'Ir a la conversación';
+    conversation.textContent = 'Abrir en consola';
     conversation.onclick = async () => {
       conversation.disabled = true;
       try {
@@ -578,7 +604,17 @@ async function openHistory() {
         $('history-result').textContent = 'No se pudo abrir la conversación.';
       } finally { conversation.disabled = false; }
     };
-    action.append(open, conversation); row.append(action); rows.append(row);
+    const view = document.createElement('button');
+    view.textContent = 'Ver conversación';
+    view.onclick = () => {
+      const actor = [...state.actors.values()].find(item => !item.departing && !item.info.parent &&
+        item.info.conversation?.profile === record.profile && item.info.conversation.sessionId === record.sessionId);
+      if (actor) { void openCard(actor); return; }
+      $('history-conversation').hidden = false;
+      $('history-conversation-title').textContent = record.title;
+      void showTranscript(record.profile, record.sessionId, 'history');
+    };
+    action.append(view, conversation, open); row.append(action); rows.append(row);
   }
   if (!records.length) $('history-result').textContent = 'No hay conversaciones en los últimos 7 días.';
 }
@@ -721,6 +757,14 @@ $('skills-import-file').onclick = () => {
   void runSkills(() => office.skillsImport('file'), 'Seleccionando archivo…', 'Skill adjuntada.');
 };
 $('minimize').onclick = () => office.minimize();
+$('maximize').onclick = () => office.toggleMaximize();
+function showMaximized(maximized: boolean) {
+  const button = $('maximize');
+  const label = maximized ? 'Restaurar ventana' : 'Maximizar ventana';
+  button.setAttribute('aria-label', label); button.title = label; button.textContent = maximized ? '❐' : '□';
+}
+office.onMaximized(showMaximized);
+void office.maximized().then(showMaximized);
 $('close').onclick = () => office.close();
 $('mute').onclick = () => {
   muted = !muted; office.setMuted(muted);
@@ -728,7 +772,6 @@ $('mute').onclick = () => {
 };
 office.onVisibility(visible => scene.setVisible(visible));
 office.subscribe(apply);
-office.onBriefing(id => { if (!briefings.includes(id)) briefings.push(id); scene.offerBriefing(); renderNotices(); });
 void office.muted().then(value => { muted = value; $('mute').setAttribute('aria-pressed', String(muted)); $('mute').textContent = muted ? 'Silencio' : 'Sonido'; });
 void office.version().then(version => { $('app-version').textContent = 'v' + version; });
 function showAppUpdate(update: unknown) {
@@ -775,12 +818,12 @@ $('app-update-close').onclick = event => {
 };
 void office.checkAppUpdate().then(showAppUpdate).catch(() => undefined);
 void office.snapshot().then(apply);
-// Connecting omp is an explicit user action: the office never changes omp on its own.
+// Connecting omp for the first time remains an explicit action; owned bridges update at startup.
 void office.bridgeStatus().then(status => {
-  if (status !== 'install' && status !== 'update') return;
+  if (status !== 'install') return;
   const button = document.createElement('button');
   button.className = 'notice briefing';
-  button.textContent = status === 'install' ? 'Conectar la oficina con omp' : 'Actualizar el puente de omp';
+  button.textContent = 'Conectar la oficina con omp';
   const detail = document.createElement('small');
   detail.textContent = 'Añade solo la carpeta extensions\\nter-office a tu perfil de omp';
   button.append(detail);
@@ -967,6 +1010,22 @@ void office.tokenSaving().then(value => {
   tokenSavingStatus.classList.add('error');
   tokenSavingStatus.textContent = 'No se pudo cargar la preferencia: ' + String(error);
 });
+const autoUpdateToggle = $<HTMLInputElement>('omp-auto-update'), autoUpdateStatus = $('omp-auto-update-status');
+let autoUpdateValue = true;
+autoUpdateToggle.onchange = async () => {
+  const next = autoUpdateToggle.checked;
+  autoUpdateToggle.disabled = true;
+  try {
+    await office.setOmpAutoUpdate(next);
+    autoUpdateValue = next; autoUpdateStatus.textContent = 'Preferencia guardada.';
+  } catch {
+    autoUpdateToggle.checked = autoUpdateValue;
+    autoUpdateStatus.textContent = 'No se pudo guardar la preferencia.';
+  } finally { autoUpdateToggle.disabled = false; }
+};
+void office.ompAutoUpdate().then(value => {
+  autoUpdateValue = value; autoUpdateToggle.checked = value; autoUpdateToggle.disabled = false;
+}).catch(() => { autoUpdateStatus.textContent = 'No se pudo cargar la preferencia.'; });
 void office.appearance().then(saved => {
   appearance = saved ? {
     ...saved,
