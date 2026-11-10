@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.16
+
+### Changed
+
+- El panel de skills distingue entre las skills propias, el catálogo Nter y la importación manual, con explicaciones y estados más claros.
+- Las fichas de agentes y subagentes usan el color elegido para su personaje y muestran su tipo; las mesas conservan su color.
+- Las fichas de agentes y subagentes se pueden minimizar, restaurar y mover dentro de la oficina.
+- Los agentes sin modelo conocido ya no aparecen en la oficina; sus sesiones e historial se conservan.
+
 ## 0.1.15
 
 ### Added

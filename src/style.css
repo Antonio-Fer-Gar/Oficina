@@ -32,16 +32,52 @@ button[aria-pressed="true"] { background: #d9dccd; }
 .app-update-close { position: absolute; top: 10px; right: 10px; }
 .panel { position: absolute; top: 34px; bottom: 8px; background: #f8f7f1; border: 1px solid #8c9882; box-shadow: 0 6px 22px #0003; padding: 8px 12px; overflow: auto; user-select: text; }
 .panel header { position: sticky; top: -8px; z-index: 2; display: flex; justify-content: space-between; align-items: center; margin: -8px -12px 6px; padding: 8px 12px; background: #f8f7f1; }
-.skills { right: 10px; width: min(440px, calc(100% - 20px)); }
+.skills { right: 10px; width: min(640px, calc(100% - 20px)); font-size: 14px; line-height: 1.45; }
 .skills p { overflow-wrap: anywhere; }
+.skills-help summary { cursor: pointer; color: #4e6247; font-weight: 600; }
+.skills-help p { margin: 6px 0; }
+.skills-note, .skills-empty { padding: 9px 11px; border-left: 3px solid #87997a; background: #edf2e8; color: #344333; }
+.skills-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+.skills-tabs button { padding: 6px 10px; }
+.skills-tabs button[aria-pressed="true"] { background: #59684f; border-color: #59684f; color: #fff; font-weight: 700; }
+.skills-status { min-height: 0; }
+.skills-section { margin-top: 12px; }
+.skills-section h2 { margin: 0 0 4px; font-size: 16px; color: #303a30; }
+.skills-section > p { margin: 6px 0 10px; }
+.skills-search { display: block; margin: 12px 0 4px; font-weight: 600; }
+#catalog-search { width: 100%; padding: 7px 9px; font: inherit; }
+.skills-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.skills-actions button, #catalog-load { padding: 6px 10px; }
+.skills-external { margin-top: 16px; padding-top: 12px; border-top: 1px solid #d0d7c9; }
+.skills-external summary { cursor: pointer; font-weight: 700; }
 .skills-list { list-style: none; margin: 8px 0; padding: 0; }
-.skills-list li { padding: 8px 0; border-top: 1px solid #dfe0d6; overflow-wrap: anywhere; }
-.skills-list label { display: flex; align-items: flex-start; gap: 6px; font-weight: 600; }
-.skills-list input { flex: none; margin: 3px 0 0; }
-.skills-list .hint { margin-left: 19px; white-space: pre-wrap; }
+.skills-list li { padding: 10px 0; border-top: 1px solid #dfe0d6; overflow-wrap: anywhere; }
+.skills-list label { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.skills-list input { flex: none; width: 16px; height: 16px; margin: 0; }
+.skills-list .hint { margin: 5px 0 0; white-space: pre-wrap; }
+.skills-list .skill-state { margin-left: auto; font-size: 12px; color: #59684f; font-weight: 600; }
+.skills-list button { margin-top: 7px; }
+@media (max-height: 400px) {
+  .skills { font-size: 13px; line-height: 1.3; }
+  .skills-tabs { margin: 5px 0 0; gap: 4px; }
+  .skills-tabs button { padding: 3px 7px; }
+  .skills-section { margin-top: 5px; }
+  .skills-section h2 { font-size: 14px; }
+  .skills-section > p { margin: 3px 0; }
+  .skills-list li { padding: 5px 0; }
+}
 @media (max-width: 600px) { .toolbar .status { display: none; } }
 @media (max-width: 400px) { .toolbar { gap: 2px; padding-inline: 4px; } .toolbar button { padding-inline: 5px; } }
 .card { right: 10px; width: min(680px, calc(100% - 20px)); }
+#card { --role-color: #4c9fc2; background: color-mix(in srgb, var(--role-color) 22%, #fff); border: 2px solid color-mix(in srgb, var(--role-color) 75%, #344333); }
+#card header { background: color-mix(in srgb, var(--role-color) 38%, #fff); cursor: grab; touch-action: none; user-select: none; }
+#card header:active { cursor: grabbing; }
+#card header:focus-visible { outline: 2px solid #46553d; outline-offset: -3px; }
+#card .card-title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#card .card-actions { display: flex; flex-shrink: 0; gap: 4px; }
+#card.minimized { width: min(300px, calc(100% - 20px)); overflow: hidden; }
+#card.minimized > :not(header) { display: none; }
+.card-kind { display: inline-block; margin-left: 8px; padding: 2px 6px; border-radius: 3px; background: #ffffffb8; color: #303a30; font-size: 12px; font-weight: 600; }
 .card dl { display: grid; grid-template-columns: 70px 1fr; gap: 2px 8px; margin: 0 0 8px; }
 .card dt { color: #6d756a; } .card dd { margin: 0; word-break: break-all; }
 .card label { display: block; margin-top: 6px; } .card select, .card textarea { width: 100%; font: inherit; margin-top: 3px; }

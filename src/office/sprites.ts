@@ -38,7 +38,7 @@ const EARTH: ReadonlyArray<readonly [number, number, number, number, string]> = 
   [-2, -7, 5, 1, '#eef6f7'], [-3, -6, 7, 1, '#eef6f7'], [-1, 6, 3, 1, '#eef6f7'], [-2, 7, 5, 1, '#eef6f7'],
 ];
 type RobotPalette = { shell: string; light: string; shade: string };
-const ROBOT_PALETTES: Record<RobotColor, RobotPalette> = {
+export const ROBOT_PALETTES: Record<RobotColor, RobotPalette> = {
   blue: { shell: '#4c9fc2', light: '#a6e1eb', shade: '#31738e' },
   orange: { shell: '#e89b54', light: '#f6ca84', shade: '#b86a37' },
   mint: { shell: '#65b99c', light: '#b4e3ce', shade: '#438a75' },
@@ -632,7 +632,7 @@ export class Painter {
   }
 }
 export const COATS = ['#d5a376', '#67616d', '#e5e0d5', '#9c9a9e', '#b58b73'];
-const OUTFIT_COLORS: Record<Outfit, string> = {
+export const OUTFIT_COLORS: Record<Outfit, string> = {
   shirt: '#8fb5ca', polo: '#f0ede3', jacket: '#8d9b80', suit: '#3e4652', hoodie: '#c9705a', stripes: '#3f5a7a', labcoat: '#f6f6f2',
 };
 interface DogStyle {

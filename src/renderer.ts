@@ -1,7 +1,7 @@
 import type { AgentInfo, Answer, CommandResult, ModelRef, PendingQuestion, Thinking } from './bridge/protocol.ts';
 import type { OfficeApi, OfficeUpdate } from './preload.ts';
 import { createScene } from './office/scene.ts';
-import { COATS, Painter } from './office/sprites.ts';
+import { COATS, OUTFIT_COLORS, Painter, ROBOT_PALETTES } from './office/sprites.ts';
 import {
   BREEDS, DEFAULT_APPEARANCE, DEFAULT_HUMAN, DEFAULT_ROBOT_COLORS,
   HUMAN_GENDERS, HUMAN_HAIR_COLORS, HUMAN_HAIR_STYLES, HUMAN_SKINS, OUTFITS, ROBOT_COLORS,
@@ -9,7 +9,7 @@ import {
 } from './office/appearance.ts';
 import { agentKey, createOffice, isWorking, syncOffice, type Actor, type Project } from './state.ts';
 import { actorName, catNameKey, moleActor, projectName, type OfficeNames } from './office/names.ts';
-import type { ManagedSkill } from './skills.ts';
+import type { InstalledSkill, ManagedSkill } from './skills.ts';
 import type { CatalogSkill } from './catalog-browser.ts';
 
 declare global { interface Window { office: OfficeApi } }
@@ -66,7 +66,7 @@ function showMessageZap(id: string) {
   if (appearanceReady) scene.zap(id); else deferredZaps.push(id);
 }
 function apply(update: OfficeUpdate) {
-  agents = update.agents;
+  agents = update.agents.filter(agent => agent.model !== null);
   inventoryComplete = update.complete;
   syncOffice(state, agents, update.complete);
   scene.update(state);
@@ -301,6 +301,74 @@ function fillCard(actor: Actor) {
     ? 'Para ver las acciones, reinicia esta consola de omp cuando termine su trabajo y cargará el puente actualizado.' : '';
   renderQuestionForm(actor);
 }
+const card = $('card'), cardHeader = $('card-header'), cardMinimize = $<HTMLButtonElement>('card-minimize');
+let expandedCardHeight = 0, cardScroll = 0;
+let cardDrag: { pointer: number; x: number; y: number } | null = null;
+const clamp = (value: number, max: number) => Math.max(0, Math.min(value, Math.max(0, max)));
+
+function fitCard() {
+  if (card.hidden) return;
+  const dock = card.parentElement!, minimized = card.classList.contains('minimized');
+  const height = minimized ? card.offsetHeight : Math.min(expandedCardHeight || card.offsetHeight, dock.clientHeight);
+  const top = clamp(card.offsetTop, dock.clientHeight - height);
+  card.style.top = `${top}px`;
+  if (!minimized && expandedCardHeight) card.style.height = `${Math.min(expandedCardHeight, dock.clientHeight - top)}px`;
+  if (card.style.left) card.style.left = `${clamp(card.offsetLeft, dock.clientWidth - card.offsetWidth)}px`;
+}
+
+function moveCard(left: number, top: number) {
+  const dock = card.parentElement!;
+  if (!card.classList.contains('minimized')) {
+    if (!expandedCardHeight) expandedCardHeight = card.offsetHeight;
+    card.style.height = `${card.offsetHeight}px`;
+  }
+  card.style.right = 'auto'; card.style.bottom = 'auto';
+  card.style.left = `${clamp(left, dock.clientWidth - card.offsetWidth)}px`;
+  card.style.top = `${clamp(top, dock.clientHeight - card.offsetHeight)}px`;
+}
+
+function minimizeCard(minimized: boolean) {
+  if (card.classList.contains('minimized') === minimized) return;
+  if (minimized) {
+    expandedCardHeight = card.offsetHeight;
+    cardScroll = card.scrollTop;
+    card.scrollTop = 0;
+    card.style.bottom = 'auto'; card.style.height = 'auto';
+  }
+  card.classList.toggle('minimized', minimized);
+  const label = minimized ? 'Restaurar ficha' : 'Minimizar ficha';
+  cardMinimize.textContent = minimized ? '□' : '–';
+  cardMinimize.setAttribute('aria-label', label);
+  cardMinimize.setAttribute('aria-expanded', String(!minimized));
+  cardMinimize.title = label;
+  fitCard();
+  if (!minimized) card.scrollTop = cardScroll;
+}
+
+cardMinimize.onclick = () => minimizeCard(!card.classList.contains('minimized'));
+cardHeader.onpointerdown = event => {
+  if (event.button !== 0 || (event.target as Element).closest('button')) return;
+  const rect = card.getBoundingClientRect();
+  cardDrag = { pointer: event.pointerId, x: event.clientX - rect.left, y: event.clientY - rect.top };
+  cardHeader.setPointerCapture(event.pointerId);
+  event.preventDefault();
+};
+cardHeader.onpointermove = event => {
+  if (!cardDrag || cardDrag.pointer !== event.pointerId) return;
+  const dock = card.parentElement!.getBoundingClientRect();
+  moveCard(event.clientX - dock.left - cardDrag.x, event.clientY - dock.top - cardDrag.y);
+};
+cardHeader.onpointerup = cardHeader.onpointercancel = () => { cardDrag = null; };
+cardHeader.onkeydown = event => {
+  if (event.target !== cardHeader) return;
+  const movement: Record<string, [number, number]> = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] };
+  const delta = movement[event.key];
+  if (!delta) return;
+  event.preventDefault();
+  moveCard(card.offsetLeft + delta[0], card.offsetTop + delta[1]);
+};
+window.addEventListener('resize', fitCard);
+
 async function openCard(actor: Actor) {
   $('project').hidden = true; selectedProject = null;
   $('skills').hidden = true;
@@ -310,11 +378,18 @@ async function openCard(actor: Actor) {
   $('cat-name-result').textContent = '';
   selected = actor.id;
   const info = actor.info, select = $<HTMLSelectElement>('card-model');
+  const role = info.parent ? 'subagent' : 'agent';
+  const color = activeTheme() === 'robots'
+    ? ROBOT_PALETTES[(appearance.robotColors ?? DEFAULT_ROBOT_COLORS)[role]].shell
+    : OUTFIT_COLORS[appearance.outfits[role === 'agent' ? 'cat' : 'mouse']];
+  $('card').style.setProperty('--role-color', color);
+  $('card-kind').textContent = role === 'agent' ? 'Agente' : 'Subagente';
   if (info.conversation) void showTranscript(info.conversation.profile, info.conversation.sessionId, 'card');
   else { ++transcriptRequest; transcriptKey = ''; $('card-transcript').replaceChildren(); $('card-transcript-status').textContent = 'Este agente no tiene una conversación guardada disponible.'; }
   $('card-result').textContent = ''; $('card-result').classList.remove('error');
   fillCard(actor); disableCard(false);
   $('card').hidden = false; $('history').hidden = true;
+  minimizeCard(false); fitCard();
   select.replaceChildren(); $<HTMLSelectElement>('card-thinking').replaceChildren();
   $<HTMLButtonElement>('card-model-confirm').disabled = true;
   if (info.connected === false) {
@@ -621,9 +696,20 @@ async function openHistory() {
 $('history-button').onclick = () => void openHistory();
 $('history-close').onclick = () => { $('history').hidden = true; };
 
-let managedSkills: ManagedSkill[] = [], skillsBusy = false;
+let managedSkills: ManagedSkill[] = [], installedSkills: InstalledSkill[] = [], skillsBusy = false, skillsLoaded = false;
 let catalogSkills: CatalogSkill[] = [];
 let catalogLoaded = false, catalogLoading = false;
+function selectSkillsTab(tab: string) {
+  if (!skillsBusy) $('skills-status').textContent = '';
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-skills-tab]')) {
+    const selected = button.dataset.skillsTab === tab;
+    button.setAttribute('aria-pressed', String(selected));
+    $(button.getAttribute('aria-controls')!).hidden = !selected;
+  }
+}
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-skills-tab]')) {
+  button.onclick = () => selectSkillsTab(button.dataset.skillsTab!);
+}
 function renderCatalog() {
   const list = $('catalog-list'), status = $('catalog-status');
   list.replaceChildren();
@@ -633,7 +719,7 @@ function renderCatalog() {
   const matches = catalogSkills.filter(skill =>
     [skill.name, skill.category, skill.description].some(value => value.toLocaleLowerCase().includes(query)));
   status.classList.remove('error');
-  status.textContent = matches.length ? `${matches.length} skills encontradas.` : 'No hay resultados en el catálogo.';
+  status.textContent = matches.length ? `${matches.length} ${matches.length === 1 ? 'skill encontrada' : 'skills encontradas'}.` : 'No se encontraron skills con esa búsqueda.';
   for (const skill of matches) {
     const item = document.createElement('li'), title = document.createElement('strong');
     const details = document.createElement('p'), description = document.createElement('p');
@@ -641,11 +727,15 @@ function renderCatalog() {
     title.textContent = skill.name;
     details.className = 'hint'; details.textContent = `${skill.category} · Versión ${skill.version}`;
     description.className = 'hint'; description.textContent = skill.description;
-    install.type = 'button'; install.textContent = 'Instalar'; install.disabled = skillsBusy;
-    install.setAttribute('aria-label', `Instalar ${skill.name}, versión ${skill.version}`);
+    const managed = managedSkills.find(item => item.name === skill.name);
+    const external = installedSkills.some(item => item.name === skill.name);
+    install.type = 'button';
+    install.textContent = managed ? 'Añadida en Mis skills' : external ? 'Ya instalada en omp' : 'Instalar skill';
+    install.disabled = skillsBusy || !!managed || external;
+    install.setAttribute('aria-label', managed ? `${skill.name}: añadida en Mis skills` : external ? `${skill.name}: ya instalada en omp` : `Instalar ${skill.name}, versión ${skill.version}`);
     install.onclick = () => {
       void runSkills(() => office.installCatalogSkill(skill.name, skill.version),
-        'Instalando skill del catálogo…', 'Skill del catálogo adjuntada.');
+        'Instalando skill del catálogo…', 'Skill añadida y activada. Puedes gestionarla en Mis skills.');
     };
     item.append(title, details, description, install); list.append(item);
   }
@@ -673,10 +763,12 @@ function renderSkills() {
   const list = $('skills-list'); list.replaceChildren();
   for (const skill of managedSkills) {
     const item = document.createElement('li'), label = document.createElement('label');
-    const input = document.createElement('input'), name = document.createElement('span');
+    const input = document.createElement('input'), name = document.createElement('span'), status = document.createElement('span');
     input.type = 'checkbox'; input.checked = skill.enabled; input.disabled = skillsBusy;
+    input.setAttribute('aria-label', `Activar ${skill.name}`);
     name.textContent = skill.name;
-    label.append(input, name); item.append(label);
+    status.className = 'skill-state'; status.textContent = skill.enabled ? 'Activada' : 'Desactivada';
+    label.append(input, name, status); item.append(label);
     if (skill.description) {
       const description = document.createElement('p');
       description.className = 'hint'; description.textContent = skill.description; item.append(description);
@@ -686,6 +778,7 @@ function renderSkills() {
     };
     list.append(item);
   }
+  $('skills-empty').hidden = !skillsLoaded || managedSkills.length > 0;
   $<HTMLButtonElement>('skills-import').disabled = skillsBusy;
   $<HTMLButtonElement>('skills-import-file').disabled = skillsBusy;
   renderCatalog();
@@ -697,6 +790,8 @@ async function refreshInstalledSkills() {
   try {
     const skills = await office.skillsInstalled();
     if (request !== installedSkillsRequest) return;
+    installedSkills = skills;
+    renderCatalog();
     list.replaceChildren();
     for (const skill of skills) {
       const item = document.createElement('li'), name = document.createElement('strong');
@@ -711,7 +806,7 @@ async function refreshInstalledSkills() {
       }
       list.append(item);
     }
-    status.textContent = skills.length ? `${skills.length} skills disponibles.` : 'No hay otras skills globales disponibles.';
+    status.textContent = skills.length ? `${skills.length} ${skills.length === 1 ? 'skill disponible' : 'skills disponibles'}.` : 'No se encontraron otras skills globales.';
   } catch (error) {
     if (request !== installedSkillsRequest) return;
     list.replaceChildren(); status.classList.add('error');
@@ -730,7 +825,8 @@ async function runSkills(action: () => Promise<ManagedSkill[] | null>, loading: 
     if (result === null) status.textContent = 'Selección cancelada.';
     else {
       managedSkills = result;
-      status.textContent = managedSkills.length ? success : `${success} No hay skills adjuntadas.`;
+      skillsLoaded = true;
+      status.textContent = success;
       void refreshInstalledSkills();
     }
   } catch (error) {
@@ -746,7 +842,7 @@ function openSkills() {
   if (!$('setup').hidden) { scene.setAppearance(appearance); $('setup').hidden = true; updateThemeText(); }
   for (const id of ['card', 'project', 'history', 'boss']) $(id).hidden = true;
   $('skills').hidden = false;
-  if (!skillsBusy) void runSkills(() => office.skillsList(), 'Cargando skills…', 'Skills cargadas.');
+  if (!skillsBusy) void runSkills(() => office.skillsList(), 'Cargando tus skills…', '');
 }
 $('skills-button').onclick = openSkills;
 $('skills-close').onclick = () => { $('skills').hidden = true; };
