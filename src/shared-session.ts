@@ -28,7 +28,7 @@ $process = Start-Process -FilePath $env:NTER_COLLAB_OMP -WorkingDirectory $env:N
 export async function startSharedSession(omp: string, dataDir: string, cwd: string): Promise<string | null> {
   const config = join(dataDir, 'shared-session.yml');
   await mkdir(dataDir, { recursive: true });
-  await writeFile(config, 'autoResume: false\ncollab:\n  autoStart: control\n');
+  await writeFile(config, 'autoResume: false\ncollab:\n  autoStart: control\ngenerate_image:\n  enabled: true\n');
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.OMP_PROFILE;

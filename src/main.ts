@@ -208,7 +208,7 @@ ipcMain.handle('office:new-shared-session', async () => {
   if (canceled || !cwd || owner.isDestroyed()) return;
   const { response } = await dialog.showMessageBox(owner, {
     type: 'warning', message: '¿Crear una sesión con acceso de control?',
-    detail: `Carpeta: ${cwd}\n\nQuien tenga el enlace podrá leer la conversación, enviar mensajes, interrumpir al agente y responder a solicitudes compatibles. El agente y sus herramientas se ejecutan en tu equipo. Comparte el enlace solo con personas de confianza. Puedes revocarlo con /collab stop.`,
+    detail: `Carpeta: ${cwd}\n\nQuien tenga el enlace podrá leer la conversación, enviar mensajes, pedir imágenes, interrumpir al agente y responder a solicitudes compatibles. Las herramientas se ejecutan en tu equipo y pueden consumir tu cuota. Comparte el enlace solo con personas de confianza. Puedes revocarlo con /collab stop.`,
     buttons: ['Cancelar', 'Crear y copiar enlace'], defaultId: 0, cancelId: 0, noLink: true,
   });
   if (response !== 1 || owner.isDestroyed()) return;

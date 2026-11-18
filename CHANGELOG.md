@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.18
+
+### Changed
+
+- Las nuevas sesiones compartidas habilitan la generación de imágenes de omp sin cambiar los ajustes globales.
+
 ## 0.1.17
 
 ### Added
