@@ -1,8 +1,10 @@
+import { execFile } from 'node:child_process';
 import type { Socket } from 'node:net';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createConnection, createServer } from 'node:net';
 import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import {
   AgentInfoSchema, BridgeRequestSchema, BridgeResponseSchema, DescriptorSchema,
   type AgentInfo, type BridgeResponse, type CommandResult, type Descriptor, type OfficeCommand,
@@ -107,6 +109,17 @@ export async function requestBridge(descriptor: Descriptor, request: { type: 'sn
   try { return await completed.promise; } finally { socket.destroy(); }
 }
 
+const execFileAsync = promisify(execFile);
+async function windowsProcessExists(pid: number): Promise<boolean> {
+  const { stdout } = await execFileAsync('powershell.exe', [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
+    "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process -Filter ('ProcessId=' + [int]$env:NTER_CHECK_PID)).Count",
+  ], { windowsHide: true, timeout: 10000, env: { ...process.env, NTER_CHECK_PID: String(pid) } });
+  const count = stdout.trim();
+  if (count !== '0' && count !== '1') throw new Error('No se pudo comprobar el proceso del puente');
+  return count === '1';
+}
+
 export interface BridgeInventory { agents: AgentInfo[]; complete: boolean; errors: string[] }
 export async function inspectBridges(registryDir: string): Promise<BridgeInventory> {
   await mkdir(registryDir, { recursive: true, mode: 0o700 });
@@ -117,7 +130,13 @@ export async function inspectBridges(registryDir: string): Promise<BridgeInvento
       const descriptor = DescriptorSchema.parse(JSON.parse(await readFile(join(registryDir, entry.name), 'utf8')));
       try { process.kill(descriptor.pid, 0); }
       catch (error) {
-        if (error instanceof Error && 'code' in error && error.code === 'ESRCH') continue;
+        if (error instanceof Error && 'code' in error) {
+          if (error.code === 'ESRCH') continue;
+          if (process.platform === 'win32' && error.code === 'EPERM' && !(await windowsProcessExists(descriptor.pid))) {
+            await unlink(join(registryDir, entry.name)).catch(() => undefined);
+            continue;
+          }
+        }
         throw error;
       }
       const response = await requestBridge(descriptor, { type: 'snapshot' });

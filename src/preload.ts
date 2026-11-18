@@ -39,6 +39,7 @@ export interface OfficeApi {
   installAppUpdate(): Promise<{ ok: boolean; message: string }>;
   send(command: OfficeCommand): Promise<CommandResult>;
   focusSession(ref: AgentRef): Promise<FocusResult>;
+  newSharedSession(): Promise<void>;
   history(): Promise<ConversationRecord[]>;
   readConversation(profile: string, sessionId: string): Promise<ConversationMessage[]>;
   openConversation(profile: string, sessionId: string): Promise<string | null>;
@@ -85,6 +86,7 @@ const api: OfficeApi = {
   installAppUpdate: () => ipcRenderer.invoke('office:install-app-update'),
   send: command => ipcRenderer.invoke('office:send', command),
   focusSession: ref => ipcRenderer.invoke('office:focus', ref),
+  newSharedSession: () => ipcRenderer.invoke('office:new-shared-session'),
   history: () => ipcRenderer.invoke('office:history'),
   readConversation: (profile, sessionId) => ipcRenderer.invoke('office:read-conversation', profile, sessionId),
   openConversation: (profile, sessionId) => ipcRenderer.invoke('office:open-conversation', profile, sessionId),

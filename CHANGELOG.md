@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.17
+
+### Added
+
+- El botón **Nueva sesión compartida** abre omp en la carpeta elegida y copia una invitación para que otra persona pueda intervenir desde su navegador.
+
+### Changed
+
+- El historial vuelve a permitir abrir conversaciones cuando queda un registro de puente de un proceso ya cerrado; los mensajes de apertura aparecen junto al botón correspondiente.
+
 ## 0.1.16
 
 ### Changed

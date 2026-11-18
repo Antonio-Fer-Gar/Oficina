@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, screen, shell } from 'electron';
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -15,6 +15,7 @@ import { AppearanceSchema } from './office/appearance.ts';
 import { OfficeNamesSchema, RenameSchema, catNameKey, projectNameKey, type OfficeNames } from './office/names.ts';
 import { fetchUsage } from './usage.ts';
 import { conversationAction } from './resume.ts';
+import { startSharedSession } from './shared-session.ts';
 import { checkAppUpdate, downloadInstaller, latestAppUpdate, type DownloadedUpdate } from './app-update.ts';
 import { importManagedSkill, listInstalledSkills, listManagedSkills, setManagedSkillEnabled } from './skills.ts';
 import { CatalogBrowser, type CatalogSkill } from './catalog-browser.ts';
@@ -193,6 +194,40 @@ function createWindow() {
 ipcMain.handle('office:snapshot', () => latest);
 ipcMain.handle('office:send', (_event, command: unknown) => ask({ type: 'command', command: OfficeCommandSchema.parse(command) }));
 ipcMain.handle('office:focus', (_event, ref: unknown) => focusSession(AgentRefSchema.parse(ref)));
+ipcMain.handle('office:new-shared-session', async () => {
+  if (!window) return;
+  const owner = window;
+  const omp = join(process.env.LOCALAPPDATA ?? '', 'omp', 'omp.exe');
+  if (!existsSync(omp)) {
+    await dialog.showMessageBox(owner, { type: 'error', message: 'No se encontró omp en este equipo.' });
+    return;
+  }
+  const { canceled, filePaths: [cwd] } = await dialog.showOpenDialog(owner, {
+    title: 'Carpeta de la nueva sesión compartida', buttonLabel: 'Elegir carpeta', properties: ['openDirectory'],
+  });
+  if (canceled || !cwd || owner.isDestroyed()) return;
+  const { response } = await dialog.showMessageBox(owner, {
+    type: 'warning', message: '¿Crear una sesión con acceso de control?',
+    detail: `Carpeta: ${cwd}\n\nQuien tenga el enlace podrá leer la conversación, enviar mensajes, interrumpir al agente y responder a solicitudes compatibles. El agente y sus herramientas se ejecutan en tu equipo. Comparte el enlace solo con personas de confianza. Puedes revocarlo con /collab stop.`,
+    buttons: ['Cancelar', 'Crear y copiar enlace'], defaultId: 0, cancelId: 0, noLink: true,
+  });
+  if (response !== 1 || owner.isDestroyed()) return;
+  let link: string | null;
+  try { link = await startSharedSession(omp, dataDir, cwd); }
+  catch {
+    if (!owner.isDestroyed()) await dialog.showMessageBox(owner, { type: 'error', message: 'No se pudo iniciar la sesión compartida.' });
+    return;
+  }
+  if (owner.isDestroyed()) return;
+  if (!link) {
+    await dialog.showMessageBox(owner, { type: 'warning', message: 'No se pudo obtener el enlace de la sesión nueva.',
+      detail: 'Si la consola de omp sigue abierta, usa /collab en ella para ver el enlace o /collab stop para dejar de compartir.' });
+    return;
+  }
+  clipboard.writeText(link);
+  await dialog.showMessageBox(owner, { type: 'info', message: 'Enlace de control copiado.',
+    detail: 'Pégalo en un mensaje privado. Para dejar de compartir, usa /collab stop en la consola de esta sesión.' });
+});
 ipcMain.handle('office:history', async () => (history = await ask<ConversationRecord[]>({ type: 'history' })));
 ipcMain.handle('office:read-conversation', async (_event, profile: unknown, sessionId: unknown) => {
   const live = latest.agents.find(agent => !agent.parent && agent.conversation?.profile === profile && agent.conversation?.sessionId === sessionId);

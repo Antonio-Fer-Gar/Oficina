@@ -1,8 +1,8 @@
-import { afterEach, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { afterEach, expect, spyOn, test } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createBridgeServer, requestBridge } from '../src/bridge/pipe.ts';
+import { createBridgeServer, inspectBridges, requestBridge } from '../src/bridge/pipe.ts';
 import type { AgentInfo } from '../src/bridge/protocol.ts';
 const directories: string[] = [];
 afterEach(() => { for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true }); });
@@ -41,4 +41,21 @@ test('a child removed from the live registry cannot receive a queued message', a
     expect(response.result).toMatchObject({ ok: false, code: 'stale' });
     expect(changed).toBe(false);
   } finally { await server.close(); }
+});
+
+test.skipIf(process.platform !== 'win32')('an inaccessible dead bridge does not block history, but an unreachable live bridge does', async () => {
+  const dir = registry();
+  const descriptor = { version: 1, instanceId: 'old', generation: 'old', pid: 2147483647,
+    pipe: '\\\\.\\pipe\\nter-missing-test', token: 'a'.repeat(64), startedAt: '2026-01-01T00:00:00Z' };
+  const kill = process.kill.bind(process);
+  const probe = spyOn(process, 'kill').mockImplementation((pid, signal) => {
+    if (pid === descriptor.pid) throw Object.assign(new Error('access denied'), { code: 'EPERM' });
+    return kill(pid, signal);
+  });
+  try {
+    writeFileSync(join(dir, 'old.json'), JSON.stringify(descriptor));
+    expect((await inspectBridges(dir)).complete).toBe(true);
+    writeFileSync(join(dir, 'old.json'), JSON.stringify({ ...descriptor, pid: process.pid }));
+    expect((await inspectBridges(dir)).complete).toBe(false);
+  } finally { probe.mockRestore(); }
 });

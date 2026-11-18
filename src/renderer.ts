@@ -662,21 +662,23 @@ async function openHistory() {
     for (const [value, cls] of [[record.project, ''], [record.title, ''], [record.cwd, 'path'], [labels[record.availability], '']] as const) {
       const cell = document.createElement('td'); cell.textContent = value; if (cls) cell.className = cls; row.append(cell);
     }
-    const action = document.createElement('td'), open = document.createElement('button');
+    const action = document.createElement('td'), open = document.createElement('button'), status = document.createElement('p');
+    status.className = 'hint'; status.setAttribute('role', 'status');
     open.textContent = 'Abrir carpeta';
     open.onclick = async () => {
       const error = await office.showFolder(record.profile, record.sessionId);
-      $('history-result').textContent = error ?? '';
+      status.textContent = error ?? '';
     };
     const conversation = document.createElement('button');
     conversation.textContent = 'Abrir en consola';
     conversation.onclick = async () => {
       conversation.disabled = true;
+      status.textContent = 'Abriendo consola…';
       try {
         const error = await office.openConversation(record.profile, record.sessionId);
-        $('history-result').textContent = error ?? '';
+        status.textContent = error ?? 'Consola abierta.';
       } catch {
-        $('history-result').textContent = 'No se pudo abrir la conversación.';
+        status.textContent = 'No se pudo abrir la conversación.';
       } finally { conversation.disabled = false; }
     };
     const view = document.createElement('button');
@@ -689,11 +691,20 @@ async function openHistory() {
       $('history-conversation-title').textContent = record.title;
       void showTranscript(record.profile, record.sessionId, 'history');
     };
-    action.append(view, conversation, open); row.append(action); rows.append(row);
+    action.append(view, conversation, open, status); row.append(action); rows.append(row);
   }
   if (!records.length) $('history-result').textContent = 'No hay conversaciones en los últimos 7 días.';
 }
 $('history-button').onclick = () => void openHistory();
+const sharedSessionButton = $<HTMLButtonElement>('new-shared-session');
+sharedSessionButton.onclick = async () => {
+  sharedSessionButton.disabled = true;
+  sharedSessionButton.textContent = 'Preparando sesión…';
+  try { await office.newSharedSession(); }
+  catch { sharedSessionButton.textContent = 'Reintentar nueva sesión'; return; }
+  finally { sharedSessionButton.disabled = false; }
+  sharedSessionButton.textContent = 'Nueva sesión compartida';
+};
 $('history-close').onclick = () => { $('history').hidden = true; };
 
 let managedSkills: ManagedSkill[] = [], installedSkills: InstalledSkill[] = [], skillsBusy = false, skillsLoaded = false;
